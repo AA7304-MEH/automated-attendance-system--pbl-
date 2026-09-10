@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Regenerable artifacts (scripts rebuild these in seconds)
+data/face_encodings.pkl
+data/outputs/_*.pkl
+
+# Never commit real student biometrics — enroll into a local, ignored folder
+# when you switch from the AI-generated demo faces to real people:
+# data/student_faces_real/

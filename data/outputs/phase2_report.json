@@ -1,0 +1,181 @@
+{
+  "thresholds": {
+    "match_tolerance": 0.6,
+    "auto_approve_distance": 0.45
+  },
+  "enrolled_students": [
+    "ST001",
+    "ST002",
+    "ST003",
+    "ST004",
+    "ST005",
+    "ST006"
+  ],
+  "faces_detected_in_group_photo": 6,
+  "augmented_photo_results": [
+    {
+      "location": [
+        149,
+        792,
+        211,
+        729
+      ],
+      "student_id": "ST001",
+      "similarity": 75.1,
+      "distance": 0.2495,
+      "status": "auto_approved"
+    },
+    {
+      "location": [
+        245,
+        952,
+        335,
+        862
+      ],
+      "student_id": "ST005",
+      "similarity": 76.7,
+      "distance": 0.2327,
+      "status": "auto_approved"
+    },
+    {
+      "location": [
+        171,
+        254,
+        246,
+        179
+      ],
+      "student_id": "ST002",
+      "similarity": 81.2,
+      "distance": 0.1879,
+      "status": "auto_approved"
+    },
+    {
+      "location": [
+        275,
+        394,
+        365,
+        305
+      ],
+      "student_id": "ST006",
+      "similarity": 80.6,
+      "distance": 0.1937,
+      "status": "auto_approved"
+    },
+    {
+      "location": [
+        191,
+        508,
+        253,
+        446
+      ],
+      "student_id": "ST003",
+      "similarity": 75.6,
+      "distance": 0.2438,
+      "status": "auto_approved"
+    },
+    {
+      "location": [
+        206,
+        663,
+        295,
+        573
+      ],
+      "student_id": "ST004",
+      "similarity": 73.8,
+      "distance": 0.2623,
+      "status": "auto_approved"
+    }
+  ],
+  "leave_one_out": {
+    "removed": "ST006",
+    "not_matched": true,
+    "results": [
+      {
+        "location": [
+          149,
+          792,
+          211,
+          729
+        ],
+        "student_id": "ST001",
+        "similarity": 75.1,
+        "distance": 0.2495,
+        "status": "auto_approved"
+      },
+      {
+        "location": [
+          245,
+          952,
+          335,
+          862
+        ],
+        "student_id": "ST005",
+        "similarity": 76.7,
+        "distance": 0.2327,
+        "status": "auto_approved"
+      },
+      {
+        "location": [
+          171,
+          254,
+          246,
+          179
+        ],
+        "student_id": "ST002",
+        "similarity": 81.2,
+        "distance": 0.1879,
+        "status": "auto_approved"
+      },
+      {
+        "location": [
+          275,
+          394,
+          365,
+          305
+        ],
+        "student_id": "Unknown",
+        "similarity": 27.4,
+        "distance": 0.7261,
+        "status": "unknown"
+      },
+      {
+        "location": [
+          191,
+          508,
+          253,
+          446
+        ],
+        "student_id": "ST003",
+        "similarity": 75.6,
+        "distance": 0.2438,
+        "status": "auto_approved"
+      },
+      {
+        "location": [
+          206,
+          663,
+          295,
+          573
+        ],
+        "student_id": "ST004",
+        "similarity": 73.8,
+        "distance": 0.2623,
+        "status": "auto_approved"
+      }
+    ]
+  },
+  "stranger": [
+    {
+      "location": [
+        247,
+        675,
+        632,
+        290
+      ],
+      "student_id": "Unknown",
+      "similarity": 19.8,
+      "distance": 0.8025,
+      "status": "unknown"
+    }
+  ]
+}
