@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Low attendance digest</title>
+</head>
+<body style="margin:0; padding:24px; background:#f4f6fb; font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif; color:#1c2333;">
+  <div style="max-width:640px; margin:0 auto; background:#ffffff; border:1px solid #e6e9f2; border-radius:12px; overflow:hidden;">
+    <div style="background:#141a2e; padding:18px 24px; color:#ffffff;">
+      <div style="font-size:18px; font-weight:700;">🎓 AutoAttendance — low attendance digest</div>
+      <div style="font-size:12.5px; color:#c6cde0; margin-top:3px;">Generated {{ generated }} · threshold {{ threshold }}%</div>
+    </div>
+
+    <div style="padding:22px 24px;">
+      {% if at_risk %}
+      <div style="font-size:15px; font-weight:700; color:#b23434; margin-bottom:10px;">
+        🚨 At-risk students ({{ at_risk }})
+      </div>
+      <table style="width:100%; border-collapse:collapse; font-size:13.5px; margin-bottom:22px;">
+        <tr>
+          <th style="text-align:left; padding:7px 9px; border-bottom:2px solid #e6e9f2; color:#66708a; font-size:11px; text-transform:uppercase;">Student</th>
+          <th style="text-align:left; padding:7px 9px; border-bottom:2px solid #e6e9f2; color:#66708a; font-size:11px; text-transform:uppercase;">Overall</th>
+          <th style="text-align:left; padding:7px 9px; border-bottom:2px solid #e6e9f2; color:#66708a; font-size:11px; text-transform:uppercase;">Last 7 days</th>
+          <th style="text-align:left; padding:7px 9px; border-bottom:2px solid #e6e9f2; color:#66708a; font-size:11px; text-transform:uppercase;">Worst subject</th>
+        </tr>
+        {% for s in at_risk %}
+        <tr>
+          <td style="padding:8px 9px; border-bottom:1px solid #eef0f6;"><code style="background:#eef1f7; padding:1px 6px; border-radius:5px;">{{ s.student.student_id }}</code> {{ s.student.full_name }}</td>
+          <td style="padding:8px 9px; border-bottom:1px solid #eef0f6; font-weight:700; color:#b23434;">{{ '%.0f'|format(s.pct) }}% <span style="font-weight:400; color:#66708a;">({{ s.present }}/{{ s.total }})</span></td>
+          <td style="padding:8px 9px; border-bottom:1px solid #eef0f6;">{{ '%.0f'|format(s.recent_pct) }}% <span style="color:#66708a;">({{ s.recent_present }}/{{ s.recent_total }})</span> {% if s.delta >= 2 %}<span style="color:#18a058;">▲</span>{% elif s.delta <= -2 %}<span style="color:#d64545;">▼</span>{% endif %}</td>
+          <td style="padding:8px 9px; border-bottom:1px solid #eef0f6; color:#66708a;">{{ s.worst_subject or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <div style="font-size:15px; font-weight:700; color:#0d7a43; margin-bottom:18px;">🎉 Everyone is above the {{ threshold }}% line.</div>
+      {% endif %}
+
+      {% if borderline %}
+      <div style="font-size:15px; font-weight:700; color:#9c6106; margin-bottom:10px;">
+        ⚠️ Borderline — watch list ({{ borderline }})
+      </div>
+      <table style="width:100%; border-collapse:collapse; font-size:13.5px; margin-bottom:20px;">
+        {% for s in borderline %}
+        <tr>
+          <td style="padding:7px 9px; border-bottom:1px solid #eef0f6;"><code style="background:#eef1f7; padding:1px 6px; border-radius:5px;">{{ s.student.student_id }}</code> {{ s.student.full_name }}</td>
+          <td style="padding:7px 9px; border-bottom:1px solid #eef0f6;">{{ '%.0f'|format(s.pct) }}% ({{ s.present }}/{{ s.total }})</td>
+          <td style="padding:7px 9px; border-bottom:1px solid #eef0f6; color:#66708a;">last 7d {{ '%.0f'|format(s.recent_pct) }}%</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% endif %}
+
+      <p style="font-size:12.5px; color:#66708a; margin:14px 0 0;">
+        Suggested action: talk to at-risk students this week and verify their recent
+        attendance marks. Detailed views: Analytics and Alerts dashboards.
+      </p>
+    </div>
+
+    <div style="padding:14px 24px; background:#fafbfd; border-top:1px solid #e6e9f2; font-size:11.5px; color:#8a93a8;">
+      Automated digest from your AutoAttendance demo system · AI suggests, teacher decides.
+    </div>
+  </div>
+</body>
+</html>

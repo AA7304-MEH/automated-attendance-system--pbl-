@@ -1,22 +1,29 @@
-"""Idempotent demo seeding: 1 teacher, 3 subjects, 6 students (the AI-generated
-demo portraits), plus ~3 weeks of deterministic attendance history so the
-analytics page is alive on first login. ST005 is deliberately a chronic
-absentee so the at-risk list has a real entry.
+"""Idempotent demo seeding + lightweight migration.
 
-Everything is synthetic demo data — no real people.
+Demo staff (all synthetic):
+    Dr. Kavita Rao   admin   teacher@college.edu / teacher123
+    Prof. Arjun Nair teacher arjun@college.edu   / teacher123  (owns CS405)
+
+6 AI-generated students, 3 subjects, ~3 weeks of deterministic history
+(ST005 is a chronic absentee so the at-risk views have real data).
+
+Migration: databases created before Phase 5 lack teachers.role — we ALTER in
+place and promote the first teacher to admin.
 """
 
 import random
 from datetime import date, time, timedelta
 
-from config import ATTENDANCE_THRESHOLD, ENCODINGS_PATH, STUDENT_FACES_DIR
+from config import ENCODINGS_PATH, STUDENT_FACES_DIR
 from face_engine.encoder import FaceEncodingStore
 from .models import db, Teacher, Student, Subject, Attendance
 
-DEMO_TEACHER = {"name": "Dr. Kavita Rao", "email": "teacher@college.edu", "password": "teacher123"}
+DEMO_ADMIN = {"name": "Dr. Kavita Rao", "email": "teacher@college.edu",
+              "password": "teacher123", "role": "admin"}
+DEMO_TEACHER2 = {"name": "Prof. Arjun Nair", "email": "arjun@college.edu",
+                 "password": "teacher123", "role": "teacher"}
 
 DEMO_STUDENTS = [
-    # (student_id, first, last, department, semester)
     ("ST001", "Aarav", "Sharma", "Computer Engineering", "Sem 5"),
     ("ST002", "Meera", "Iyer", "Computer Engineering", "Sem 5"),
     ("ST003", "Daniel", "D'Souza", "Information Technology", "Sem 5"),
@@ -25,14 +32,16 @@ DEMO_STUDENTS = [
     ("ST006", "Ananya", "Nair", "Computer Engineering", "Sem 5"),
 ]
 
+# (name, code, owner: 'admin' | 'teacher2')
 DEMO_SUBJECTS = [
-    ("Data Structures", "CS201"),
-    ("Database Systems", "CS302"),
-    ("Machine Learning", "CS405"),
+    ("Data Structures", "CS201", "admin"),
+    ("Database Systems", "CS302", "admin"),
+    ("Machine Learning", "CS405", "teacher2"),
 ]
 
 # per-student probability of attending a class (demo history flavour)
-_PRESENT_PROB = {"ST001": 0.92, "ST002": 0.95, "ST003": 0.80, "ST004": 0.88, "ST005": 0.55, "ST006": 0.90}
+_PRESENT_PROB = {"ST001": 0.92, "ST002": 0.95, "ST003": 0.80, "ST004": 0.88,
+                 "ST005": 0.55, "ST006": 0.90}
 
 
 def ensure_encodings():
@@ -49,22 +58,82 @@ def ensure_encodings():
     return len(store)
 
 
+def _migrate(app):
+    """Add teachers.role to pre-Phase-5 databases and promote the first teacher."""
+    with db.engine.connect() as conn:
+        cols = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(teachers)")]
+        if "role" not in cols:
+            conn.exec_driver_sql(
+                "ALTER TABLE teachers ADD COLUMN role VARCHAR(10) "
+                "NOT NULL DEFAULT 'teacher'"
+            )
+            conn.commit()
+            app.logger.info("migrated teachers table: added role column")
+    if not Teacher.query.filter_by(role="admin").first():
+        first = Teacher.query.order_by(Teacher.id).first()
+        if first:
+            first.role = "admin"
+            db.session.commit()
+
+
+def ensure_demo_staff(app):
+    """Guarantee the two demo accounts + CS405 assignment exist (any DB age)."""
+    changed = False
+    admin = Teacher.query.filter_by(email=DEMO_ADMIN["email"]).first()
+    if not admin:
+        admin = Teacher(name=DEMO_ADMIN["name"], email=DEMO_ADMIN["email"],
+                        role=DEMO_ADMIN["role"])
+        admin.set_password(DEMO_ADMIN["password"])
+        db.session.add(admin)
+        db.session.flush()
+        changed = True
+
+    t2 = Teacher.query.filter_by(email=DEMO_TEACHER2["email"]).first()
+    if not t2:
+        t2 = Teacher(name=DEMO_TEACHER2["name"], email=DEMO_TEACHER2["email"],
+                     role=DEMO_TEACHER2["role"])
+        t2.set_password(DEMO_TEACHER2["password"])
+        db.session.add(t2)
+        db.session.flush()
+        changed = True
+
+    ml = Subject.query.filter_by(code="CS405").first()
+    if ml and ml.teacher_id in (None, admin.id):
+        ml.teacher_id = t2.id
+        changed = True
+
+    if changed:
+        db.session.commit()
+        app.logger.info("ensured demo staff accounts")
+    return changed
+
+
 def seed_if_needed(app):
     with app.app_context():
         db.create_all()
+        _migrate(app)
 
         if Teacher.query.first():
             ensure_encodings()
+            ensure_demo_staff(app)
             return False  # already seeded
 
-        teacher = Teacher(name=DEMO_TEACHER["name"], email=DEMO_TEACHER["email"])
-        teacher.set_password(DEMO_TEACHER["password"])
-        db.session.add(teacher)
+        admin = Teacher(name=DEMO_ADMIN["name"], email=DEMO_ADMIN["email"],
+                        role=DEMO_ADMIN["role"])
+        admin.set_password(DEMO_ADMIN["password"])
+        db.session.add(admin)
         db.session.flush()
 
+        t2 = Teacher(name=DEMO_TEACHER2["name"], email=DEMO_TEACHER2["email"],
+                     role=DEMO_TEACHER2["role"])
+        t2.set_password(DEMO_TEACHER2["password"])
+        db.session.add(t2)
+        db.session.flush()
+
+        owners = {"admin": admin, "teacher2": t2}
         subjects = [
-            Subject(name=name, code=code, teacher_id=teacher.id)
-            for name, code in DEMO_SUBJECTS
+            Subject(name=name, code=code, teacher_id=owners[owner].id)
+            for name, code, owner in DEMO_SUBJECTS
         ]
         db.session.add_all(subjects)
 
@@ -107,9 +176,11 @@ def seed_if_needed(app):
                             status="Present" if present else "Absent",
                             confidence=None,
                             method="manual",
-                            verified_by=teacher.id,
+                            verified_by=subj.teacher_id,
                         )
                     )
         db.session.commit()
-        app.logger.info("Seeded demo teacher/subjects/students + %d attendance rows", len(days) * 3 * len(students))
+        app.logger.info("Seeded 2 demo staff, %d subjects, %d students, "
+                        "%d attendance rows", len(subjects), len(students),
+                        len(days) * len(subjects) * len(students))
         return True

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Admin · Attendance{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Admin</h1>
+  <p class="muted">Create teacher accounts, add subjects and assign teachers.</p>
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <h2>👤 Add a teacher / admin</h2>
+    <form method="post" action="{{ url_for('admin_add_teacher') }}" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Full name<input name="name" placeholder="Prof. Sneha Joshi" required></label>
+      <label>Email<input type="email" name="email" placeholder="sneha@college.edu" required></label>
+      <label>Password <span class="muted small">(min 6 chars)</span>
+        <input name="password" minlength="6" required>
+      </label>
+      <label>Role
+        <select name="role">
+          <option value="teacher">Teacher</option>
+          <option value="admin">Admin</option>
+        </select>
+      </label>
+      <button class="btn btn-primary" type="submit">Create account</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>📚 Add a subject</h2>
+    <form method="post" action="{{ url_for('admin_add_subject') }}" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Subject name<input name="name" placeholder="Operating Systems" required></label>
+      <label>Code<input name="code" placeholder="CS303" required></label>
+      <label>Assign to teacher
+        <select name="teacher_id">
+          <option value="">— unassigned —</option>
+          {% for t in teachers %}
+          <option value="{{ t.id }}">{{ t.name }} ({{ t.role }})</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button class="btn btn-primary" type="submit">Add subject</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Subjects &amp; assignment</h2>
+  <table>
+    <tr><th>Code</th><th>Subject</th><th>Assigned teacher</th><th></th></tr>
+    {% for s in subjects %}
+    <tr>
+      <td><code>{{ s.code }}</code></td>
+      <td>{{ s.name }}</td>
+      <td>
+        <form method="post" action="{{ url_for('admin_assign_subject', sid=s.id) }}"
+              style="display:flex; gap:8px; align-items:center;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <select name="teacher_id" style="min-width:200px;">
+            <option value="">— unassigned —</option>
+            {% for t in teachers %}
+            <option value="{{ t.id }}" {% if s.teacher_id == t.id %}selected{% endif %}>
+              {{ t.name }} ({{ t.role }})
+            </option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-ghost btn-sm" type="submit">Save</button>
+        </form>
+      </td>
+      <td class="muted small">{{ s.marks | length }} marks recorded</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h2>Accounts ({{ teachers|length }})</h2>
+  <table>
+    <tr><th>Name</th><th>Email</th><th>Role</th><th>Subjects</th></tr>
+    {% for t in teachers %}
+    <tr>
+      <td>{{ t.name }}</td>
+      <td class="muted">{{ t.email }}</td>
+      <td>{% if t.role == 'admin' %}<span class="chip chip-amber">admin</span>
+          {% else %}<span class="chip chip-gray">teacher</span>{% endif %}</td>
+      <td class="small muted">
+        {% for s in t.subjects %}{{ s.code }}{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

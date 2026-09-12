@@ -1,4 +1,4 @@
-"""SQLAlchemy models (Phase 3).
+"""SQLAlchemy models (Phase 3, extended in Phase 5).
 
 Design note vs the blueprint: face encodings are NOT duplicated into the
 students table. data/face_encodings.pkl (owned by face_engine) stays the
@@ -34,6 +34,7 @@ class Teacher(UserMixin, db.Model):
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
+    role = db.Column(db.String(10), default="teacher", nullable=False)  # teacher | admin
 
     subjects = db.relationship("Subject", backref="teacher", lazy=True)
 

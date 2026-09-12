@@ -2,8 +2,8 @@
 
 AI-suggested, teacher-verified attendance from classroom photos (Human-in-the-Loop).
 
-**Status:** ✅ Phase 1 (environment) · ✅ Phase 2 (face engine) · ✅ Phase 3 (Flask web app) · ✅ Phase 4 (exports, alerts, Docker) — built & tested.
-**Next:** email/SMS alert delivery, multi-teacher accounts, production hardening.
+**Status:** ✅ Phase 1 (environment) · ✅ Phase 2 (face engine) · ✅ Phase 3 (Flask web app) · ✅ Phase 4 (exports, alerts, Docker) · ✅ Phase 5 (email digests, multi-teacher + admin, security hardening).
+**Next:** real SMTP credentials, deployment to a server, optional InsightFace accuracy upgrade.
 
 ---
 
@@ -119,10 +119,27 @@ setup hit three traps, all solved and automated in `setup_env.sh`:
   First boot auto-seeds demo data and rebuilds the encoding DB; mount `data/`
   to persist it. Production: serve behind a reverse proxy with HTTPS.
 
-## Phase 5 ideas (next)
+## Email digests, roles & security (Phase 5)
 
-- Email/SMS delivery of the at-risk digest (the query & page already exist —
-  wire a cron/APScheduler job to SMTP/Twilio)
-- Multiple teacher accounts + per-subject assignment; admin role
-- Production hardening: HTTPS, CSRF tokens, rate limiting
+- **Email digest**: at-risk + borderline summary emailed to teachers.
+  - Alert page: **Preview email** (see the exact email) and **Send digest now**.
+  - `python scripts/send_alerts.py --preview` · run without flags from cron:
+    `0 8 * * * cd /path/to/attendance-system && python scripts/send_alerts.py`
+  - Demo default is the **console backend** (renders the email to
+    `data/outputs/emails/` — no credentials needed). For real delivery:
+    `EMAIL_BACKEND=smtp SMTP_HOST=... SMTP_USER=... SMTP_PASSWORD=... ALERT_RECIPIENTS=...`
+- **Roles**: admins manage everything via `/admin` (create teacher/admin
+  accounts, add subjects, reassign teachers). Teachers see and mark only their
+  own subjects and sessions. Demo logins:
+  `teacher@college.edu` (admin) · `arjun@college.edu` (teacher, CS405 only) — password `teacher123`.
+- **Security hardening**: CSRF tokens on every POST, security headers
+  (CSP, nosniff, DENY frames, referrer policy), per-IP login rate limiting
+  (5 failures/min), SameSite=Lax + HttpOnly session cookies, ownership checks
+  on attendance sessions.
+
+## Phase 6 ideas (next)
+
+- Real SMTP credentials + scheduled delivery on a server
+- Public HTTPS deployment (reverse proxy + domain) using the Dockerfile
 - Optional accuracy upgrade: InsightFace/YOLOv8 engine behind the same interface
+- Student self-service login (OAuth or roll-number + OTP)

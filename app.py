@@ -1,37 +1,48 @@
-"""Phase 3 — Flask web app for the Automated Student Attendance System.
+"""Flask web app for the Automated Student Attendance System.
 
 Flow (Human-in-the-Loop):
     teacher login → upload classroom photo → AI recognition (3-state policy)
     → verification page (auto ✅ / confirm 🔄 / assign ❓) → confirm
-    → attendance written to SQLite → analytics with at-risk alerts.
+    → attendance written to SQLite → analytics & alerts → email digest.
+
+Phases:
+    3  web app: auth, upload, verification UI, attendance, analytics
+    4  CSV exports, alerts dashboard, Docker
+    5  email digests, multi-teacher + admin role, security hardening
+       (CSRF tokens, security headers, login rate limiting)
 
 Run:  python app.py   → http://localhost:8000  (binds 0.0.0.0)
-Demo login: teacher@college.edu / teacher123 (seeded on first run)
+Demo logins (seeded on first run):
+    admin:   teacher@college.edu / teacher123
+    teacher: arjun@college.edu   / teacher123
 """
 
 import io
 import json
 import re
 import secrets
+import time
 import uuid
 from collections import defaultdict
 from datetime import date, timedelta
+from functools import wraps
 from pathlib import Path
 
 import cv2
 import pandas as pd
 from flask import (
-    Flask, abort, flash, redirect, render_template, request,
-    send_from_directory, url_for, Response,
+    Flask, Response, abort, flash, redirect, render_template, request,
+    send_from_directory, session, url_for,
 )
 from flask_login import (
     LoginManager, current_user, login_required, login_user, logout_user,
 )
 
 from config import (
-    ATTENDANCE_THRESHOLD, AUTO_APPROVE_DISTANCE, BASE_DIR, DATA_DIR,
-    ENCODINGS_PATH, FACE_MATCH_TOLERANCE, ALLOWED_IMAGE_EXTS,
-    RUNTIME_UPLOADS_DIR, STUDENT_FACES_DIR, UPLOADS_DIR, WEB_SESSIONS_DIR,
+    ALERT_RECIPIENTS, ATTENDANCE_THRESHOLD, AUTO_APPROVE_DISTANCE, BASE_DIR,
+    DATA_DIR, ENCODINGS_PATH, FACE_MATCH_TOLERANCE, LOGIN_MAX_ATTEMPTS,
+    LOGIN_WINDOW_SECONDS, RUNTIME_UPLOADS_DIR, STUDENT_FACES_DIR, UPLOADS_DIR,
+    WEB_SESSIONS_DIR,
 )
 from database.models import (
     Attendance, AttendanceSession, Student, Subject, Teacher, db, now_ist,
@@ -40,13 +51,13 @@ from database.seed import seed_if_needed
 from face_engine.detector import crop_face
 from face_engine.encoder import FaceEncodingStore
 from face_engine.recognizer import FaceRecognizer
+from mailer import build_digest, send_digest
+from reports import split_risk, student_pct, student_summary
 
 # ---------------------------------------------------------------------------
 # App setup
 # ---------------------------------------------------------------------------
 DB_PATH = DATA_DIR / "attendance.db"
-RUNTIME_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-WEB_SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__)
 
@@ -56,6 +67,8 @@ if not _keyfile.exists():
 app.config["SECRET_KEY"] = _keyfile.read_text()
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB upload cap
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 db.init_app(app)
 login_manager = LoginManager(app)
@@ -85,26 +98,82 @@ with app.app_context():
 
 
 # ---------------------------------------------------------------------------
+# Security plumbing (Phase 5)
+# ---------------------------------------------------------------------------
+@app.before_request
+def csrf_protect():
+    """Reject any POST without the session's CSRF token."""
+    if request.method == "POST":
+        token = session.get("_csrf")
+        if not token or request.form.get("csrf_token") != token:
+            abort(400, description="CSRF token missing or invalid.")
+
+
+def _csrf_token():
+    if "_csrf" not in session:
+        session["_csrf"] = secrets.token_hex(32)
+    return session["_csrf"]
+
+
+app.context_processor(lambda: {"csrf_token": _csrf_token})
+
+
+@app.after_request
+def security_headers(resp):
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("Referrer-Policy", "same-origin")
+    resp.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:",
+    )
+    return resp
+
+
+# Naive per-IP login rate limiting (demo-grade; use Redis in real production)
+_failed_logins = defaultdict(list)
+
+
+def _prune_fails(ip):
+    cutoff = time.time() - LOGIN_WINDOW_SECONDS
+    _failed_logins[ip] = [t for t in _failed_logins[ip] if t > cutoff]
+
+
+def admin_required(view):
+    @wraps(view)
+    @login_required
+    def wrapped(*args, **kwargs):
+        if current_user.role != "admin":
+            abort(403)
+        return view(*args, **kwargs)
+    return wrapped
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+ALLOWED_UPLOAD_EXTS = {".jpg", ".jpeg", ".png"}
+
 def _save_upload(fileobj) -> Path:
     ext = Path(fileobj.filename).suffix.lower()
-    if ext not in ALLOWED_IMAGE_EXTS:
+    if ext not in ALLOWED_UPLOAD_EXTS:
         raise ValueError("Only .jpg / .jpeg / .png photos are allowed.")
     path = RUNTIME_UPLOADS_DIR / f"{uuid.uuid4().hex}{ext}"
     fileobj.save(path)
     return path
 
 
-def _student_pct(rows):
-    """rows: Attendance for one student → (pct, present, total)."""
-    total = len(rows)
-    present = sum(1 for r in rows if r.status == "Present")
-    return (present / total * 100 if total else 0.0), present, total
+def _visible_subjects():
+    q = Subject.query.order_by(Subject.code)
+    if current_user.role != "admin":
+        q = q.filter_by(teacher_id=current_user.id)
+    return q.all()
 
 
-def _all_marks():
-    return Attendance.query.all()
+def _own_session(sess):
+    return current_user.role == "admin" or sess.teacher_id == current_user.id
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -122,12 +191,22 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for("dashboard"))
     if request.method == "POST":
+        ip = request.remote_addr or "unknown"
+        _prune_fails(ip)
+        if len(_failed_logins[ip]) >= LOGIN_MAX_ATTEMPTS:
+            flash(
+                f"Too many failed attempts — wait {LOGIN_WINDOW_SECONDS}s and try again.",
+                "error",
+            )
+            return redirect(url_for("login"))
         teacher = Teacher.query.filter_by(
             email=request.form.get("email", "").strip().lower()
         ).first()
         if teacher and teacher.check_password(request.form.get("password", "")):
+            _failed_logins.pop(ip, None)
             login_user(teacher, remember=True)
             return redirect(url_for("dashboard"))
+        _failed_logins[ip].append(time.time())
         flash("Invalid email or password.", "error")
     return render_template("login.html")
 
@@ -145,12 +224,14 @@ def logout():
 @app.route("/teacher/dashboard")
 @login_required
 def dashboard():
-    subjects = Subject.query.order_by(Subject.code).all()
+    subjects = _visible_subjects()
     today = now_ist().date()
     todays_marks = Attendance.query.filter_by(date=today).all()
-    recent = AttendanceSession.query.order_by(
-        AttendanceSession.created_at.desc()
-    ).limit(8).all()
+
+    sess_q = AttendanceSession.query.order_by(AttendanceSession.created_at.desc())
+    if current_user.role != "admin":
+        sess_q = sess_q.filter_by(teacher_id=current_user.id)
+    recent = sess_q.limit(8).all()
 
     recent_stats = {
         s.id: {
@@ -177,6 +258,10 @@ def take_attendance():
     if not subject:
         flash("Pick a subject first.", "error")
         return redirect(url_for("dashboard"))
+    if subject.teacher_id != current_user.id and current_user.role != "admin":
+        flash("That subject is not assigned to you.", "error")
+        return redirect(url_for("dashboard"))
+
     if request.form.get("demo_photo"):
         # sandbox/demo convenience: analyze the bundled classroom photo directly
         photo_path = UPLOADS_DIR / "classroom_demo.jpg"
@@ -197,7 +282,6 @@ def take_attendance():
     recognizer = get_recognizer()
     results = recognizer.recognize(photo_path)
     if not results:
-        photo_path.unlink(missing_ok=True)
         flash("No faces detected in that photo — try a clearer, closer shot.", "error")
         return redirect(url_for("dashboard"))
 
@@ -270,6 +354,8 @@ def verify(sid):
     sess = db.session.get(AttendanceSession, sid)
     if not sess or sess.status != "pending":
         abort(404)
+    if not _own_session(sess):
+        abort(403)
     data = json.loads(sess.results_json or "{}")
     items = data.get("items", [])
 
@@ -306,6 +392,8 @@ def confirm(sid):
     sess = db.session.get(AttendanceSession, sid)
     if not sess or sess.status != "pending":
         abort(404)
+    if not _own_session(sess):
+        abort(403)
     data = json.loads(sess.results_json or "{}")
     items = data.get("items", [])
     today = now_ist().date()
@@ -376,6 +464,8 @@ def session_detail(sid):
     sess = db.session.get(AttendanceSession, sid)
     if not sess:
         abort(404)
+    if not _own_session(sess):
+        abort(403)
     present = [m for m in sess.marks if m.status == "Present"]
     absent = [m for m in sess.marks if m.status == "Absent"]
     return render_template(
@@ -405,7 +495,7 @@ def students():
         photo_name = None
         if photo_file and photo_file.filename:
             ext = Path(photo_file.filename).suffix.lower()
-            if ext not in ALLOWED_IMAGE_EXTS:
+            if ext not in ALLOWED_UPLOAD_EXTS:
                 flash("Portrait must be .jpg / .jpeg / .png.", "error")
                 return redirect(url_for("students"))
             photo_name = f"{sid}{ext}"
@@ -431,14 +521,14 @@ def students():
         return redirect(url_for("students"))
 
     roster = Student.query.filter_by(active=True).order_by(Student.student_id).all()
-    marks = _all_marks()
+    marks = Attendance.query.all()
     by_student = defaultdict(list)
     for m in marks:
         by_student[m.student_id].append(m)
 
     roster_stats = {}
     for s in roster:
-        pct, present, total = _student_pct(by_student.get(s.id, []))
+        pct, present, total = student_pct(by_student.get(s.id, []))
         roster_stats[s.id] = (pct, present, total)
     return render_template("students.html", roster=roster, stats=roster_stats,
                            threshold=ATTENDANCE_THRESHOLD)
@@ -450,23 +540,21 @@ def students():
 @app.route("/analytics")
 @login_required
 def analytics():
-    marks = _all_marks()
+    marks = Attendance.query.all()
     if not marks:
         return render_template("analytics.html", empty=True, threshold=ATTENDANCE_THRESHOLD)
 
-    # overall
     total = len(marks)
     present = sum(1 for m in marks if m.status == "Present")
     overall_pct = present / total * 100
 
-    # per student
     by_student = defaultdict(list)
     for m in marks:
         by_student[m.student_id].append(m)
     students = {s.id: s for s in Student.query.all()}
     student_stats = []
     for stu_id, rows in by_student.items():
-        pct, p, t = _student_pct(rows)
+        pct, p, t = student_pct(rows)
         student_stats.append({
             "student": students.get(stu_id), "pct": pct,
             "present": p, "total": t,
@@ -474,7 +562,6 @@ def analytics():
     student_stats.sort(key=lambda x: -x["pct"])
     at_risk = [s for s in student_stats if s["pct"] < ATTENDANCE_THRESHOLD]
 
-    # per subject
     by_subject = defaultdict(lambda: [0, 0])
     for m in marks:
         by_subject[m.subject_id][1] += 1
@@ -487,7 +574,6 @@ def analytics():
     ]
     subject_rows.sort(key=lambda x: -(x["pct"] or 0))
 
-    # trend by date
     by_date = defaultdict(lambda: [0, 0])
     for m in marks:
         by_date[m.date][1] += 1
@@ -498,7 +584,6 @@ def analytics():
         key=lambda x: x["date"],
     )
 
-    # today
     today = now_ist().date()
     today_marks = [m for m in marks if m.date == today]
     today_present = sum(1 for m in today_marks if m.status == "Present")
@@ -559,25 +644,8 @@ def _trend_svg(trend, w=680, h=190, pad=34):
     )
 
 
-@app.route("/student", methods=["GET"])
-@login_required
-def student_view():
-    sid = request.args.get("student_id", "").strip().upper()
-    student = Student.query.filter_by(student_id=sid).first() if sid else None
-    rows = (
-        Attendance.query.filter_by(student_id=student.id)
-        .order_by(Attendance.date.desc(), Attendance.time.desc()).all()
-        if student else []
-    )
-    pct, present, total = _student_pct(rows)
-    return render_template(
-        "student_view.html", sid=sid, student=student, rows=rows,
-        pct=pct, present=present, total=total, threshold=ATTENDANCE_THRESHOLD,
-    )
-
-
 # ---------------------------------------------------------------------------
-# Exports & alerts (Phase 4)
+# Exports & alerts (Phase 4/5)
 # ---------------------------------------------------------------------------
 @app.route("/export/attendance.csv")
 @login_required
@@ -606,50 +674,10 @@ def export_attendance():
     )
 
 
-def _student_summary():
-    """Per-student stats incl. recent-7-day trend and worst subject."""
-    marks = Attendance.query.all()
-    by_student = defaultdict(list)
-    for m in marks:
-        by_student[m.student_id].append(m)
-
-    today = now_ist().date()
-    week_start = today - timedelta(days=7)
-    students = {s.id: s for s in Student.query.filter_by(active=True)}
-    subjects = {s.id: s for s in Subject.query.all()}
-
-    out = []
-    for stu_id, rows in by_student.items():
-        stu = students.get(stu_id)
-        if not stu:
-            continue
-        pct, present, total = _student_pct(rows)
-        recent = [m for m in rows if m.date >= week_start]
-        r_pct, r_present, r_total = _student_pct(recent)
-
-        per_subj = defaultdict(lambda: [0, 0])
-        for m in rows:
-            per_subj[m.subject_id][1] += 1
-            if m.status == "Present":
-                per_subj[m.subject_id][0] += 1
-        worst = None
-        for s_id, (p, t) in per_subj.items():
-            if t >= 3 and (worst is None or p / t < worst[1]):
-                worst = (subjects[s_id].code, p / t)
-        out.append({
-            "student": stu, "pct": pct, "present": present, "total": total,
-            "recent_pct": r_pct, "recent_present": r_present, "recent_total": r_total,
-            "delta": r_pct - pct,
-            "worst_subject": f"{worst[0]} ({worst[1] * 100:.0f}%)" if worst else None,
-        })
-    out.sort(key=lambda x: x["pct"])
-    return out
-
-
 @app.route("/alerts")
 @login_required
 def alerts():
-    summary = _student_summary()
+    summary = student_summary()
     for s in summary:
         d = s["delta"]
         icon, color = ("→", "var(--muted)")
@@ -659,17 +687,43 @@ def alerts():
             icon, color = ("▼ declining", "var(--red)")
         s["trend_icon"] = f'<span style="color:{color};font-weight:700">{icon}</span>'
 
-    at_risk = [s for s in summary if s["pct"] < ATTENDANCE_THRESHOLD]
-    borderline = [s for s in summary if ATTENDANCE_THRESHOLD <= s["pct"] < ATTENDANCE_THRESHOLD + 10]
+    at_risk, borderline = split_risk(summary)
     return render_template("alerts.html", at_risk=at_risk, borderline=borderline,
                            threshold=ATTENDANCE_THRESHOLD)
+
+
+@app.route("/alerts/email/preview")
+@login_required
+def email_preview():
+    """Show exactly what the digest email looks like."""
+    subject, _text, html = build_digest()
+    return html
+
+
+@app.route("/alerts/email/send", methods=["POST"])
+@login_required
+def email_send():
+    recipients = ALERT_RECIPIENTS or [
+        t.email for t in Teacher.query.all() if t.email
+    ]
+    status = send_digest(recipients)
+    if status.startswith("console"):
+        flash("Email backend is 'console' (no SMTP configured) — the digest was "
+              "rendered to data/outputs/emails/. Set EMAIL_BACKEND=smtp + SMTP_* "
+              "env vars for real delivery. Preview: Alerts → 'Preview email'.", "ok")
+    elif status == "smtp:ok":
+        flash(f"Digest emailed to {len(recipients)} recipient(s).", "ok")
+    else:
+        flash(f"Nothing sent: {status}", "error")
+    return redirect(url_for("alerts"))
+
 
 
 @app.route("/export/students.csv")
 @login_required
 def export_students():
     """Per-student summary with at-risk flag."""
-    summary = _student_summary()
+    summary = student_summary()
     df = pd.DataFrame([{
         "student_id": s["student"].student_id,
         "name": s["student"].full_name,
@@ -692,8 +746,91 @@ def export_students():
 
 
 # ---------------------------------------------------------------------------
-# Secure media
+# Admin — teachers & subjects (Phase 5)
 # ---------------------------------------------------------------------------
+@app.route("/admin")
+@admin_required
+def admin():
+    teachers = Teacher.query.order_by(Teacher.role, Teacher.name).all()
+    subjects = Subject.query.order_by(Subject.code).all()
+    return render_template("admin.html", teachers=teachers, subjects=subjects)
+
+
+@app.route("/admin/teachers/add", methods=["POST"])
+@admin_required
+def admin_add_teacher():
+    name = request.form.get("name", "").strip()
+    email = request.form.get("email", "").strip().lower()
+    password = request.form.get("password", "")
+    role = request.form.get("role", "teacher")
+    if not (name and email and len(password) >= 6):
+        flash("Name, email and a password of 6+ characters are required.", "error")
+        return redirect(url_for("admin"))
+    if Teacher.query.filter_by(email=email).first():
+        flash("A user with that email already exists.", "error")
+        return redirect(url_for("admin"))
+    t = Teacher(name=name, email=email, role=role if role in ("admin", "teacher") else "teacher")
+    t.set_password(password)
+    db.session.add(t)
+    db.session.commit()
+    flash(f"Created {role}: {name} <{email}>", "ok")
+    return redirect(url_for("admin"))
+
+
+@app.route("/admin/subjects/add", methods=["POST"])
+@admin_required
+def admin_add_subject():
+    name = request.form.get("name", "").strip()
+    code = request.form.get("code", "").strip().upper()
+    teacher_id = request.form.get("teacher_id", "").strip()
+    if not (name and code):
+        flash("Subject name and code are required.", "error")
+        return redirect(url_for("admin"))
+    if Subject.query.filter_by(code=code).first():
+        flash(f"Subject code {code} already exists.", "error")
+        return redirect(url_for("admin"))
+    teacher = db.session.get(Teacher, int(teacher_id)) if teacher_id else None
+    db.session.add(Subject(name=name, code=code, teacher_id=teacher.id if teacher else None))
+    db.session.commit()
+    flash(f"Added subject {code} — {name}" +
+          (f" (assigned to {teacher.name})" if teacher else " (unassigned)"), "ok")
+    return redirect(url_for("admin"))
+
+
+@app.route("/admin/subjects/<int:sid>/assign", methods=["POST"])
+@admin_required
+def admin_assign_subject(sid):
+    subject = db.session.get(Subject, sid)
+    if not subject:
+        abort(404)
+    teacher_id = request.form.get("teacher_id", "").strip()
+    subject.teacher_id = int(teacher_id) if teacher_id else None
+    db.session.commit()
+    teacher = db.session.get(Teacher, subject.teacher_id) if subject.teacher_id else None
+    flash(f"{subject.code} reassigned to {teacher.name if teacher else 'nobody'}.", "ok")
+    return redirect(url_for("admin"))
+
+
+# ---------------------------------------------------------------------------
+# Student read-only view + secure media
+# ---------------------------------------------------------------------------
+@app.route("/student", methods=["GET"])
+@login_required
+def student_view():
+    sid = request.args.get("student_id", "").strip().upper()
+    student = Student.query.filter_by(student_id=sid).first() if sid else None
+    rows = (
+        Attendance.query.filter_by(student_id=student.id)
+        .order_by(Attendance.date.desc(), Attendance.time.desc()).all()
+        if student else []
+    )
+    pct, present, total = student_pct(rows)
+    return render_template(
+        "student_view.html", sid=sid, student=student, rows=rows,
+        pct=pct, present=present, total=total, threshold=ATTENDANCE_THRESHOLD,
+    )
+
+
 @app.route("/media/<int:sid>/<name>")
 @login_required
 def media(sid, name):
@@ -711,7 +848,8 @@ def photo(name):
 
 
 if __name__ == "__main__":
-    print("\n  Automated Student Attendance System — Phase 3")
-    print("  demo login: teacher@college.edu / teacher123")
+    print("\n  Automated Student Attendance System — Phase 5")
+    print("  admin login:   teacher@college.edu / teacher123")
+    print("  teacher login: arjun@college.edu   / teacher123")
     print("  → http://0.0.0.0:8000\n")
     app.run(host="0.0.0.0", port=8000, debug=False)

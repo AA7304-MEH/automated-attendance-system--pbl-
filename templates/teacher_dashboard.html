@@ -9,11 +9,11 @@
 <div class="statrow">
   <div class="stat">
     <div class="stat-num">{{ today_present }}<span class="muted">/{{ today_total }}</span></div>
-    <div class="stat-label">marked present today</div>
+    <div class="stat-label">marked present today (all subjects)</div>
   </div>
   <div class="stat">
     <div class="stat-num">{{ subjects|length }}</div>
-    <div class="stat-label">subjects you teach</div>
+    <div class="stat-label">your subjects</div>
   </div>
   <div class="stat">
     <div class="stat-num">{{ threshold }}%</div>
@@ -25,10 +25,13 @@
   <h2>📸 Take attendance</h2>
   <form method="post" action="{{ url_for('take_attendance') }}"
         enctype="multipart/form-data" class="upload-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Subject
       <select name="subject_id" required>
         {% for s in subjects %}
           <option value="{{ s.id }}">{{ s.code }} — {{ s.name }}</option>
+        {% else %}
+          <option value="">No subjects assigned to you — ask an admin</option>
         {% endfor %}
       </select>
     </label>

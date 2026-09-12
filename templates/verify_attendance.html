@@ -25,6 +25,7 @@
 {% endif %}
 
 <form method="post" action="{{ url_for('confirm', sid=sess.id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   {% set autos = items | selectattr('status', 'equalto', 'auto_approved') | list %}
   {% if autos %}

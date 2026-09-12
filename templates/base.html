@@ -20,9 +20,12 @@
     <a href="{{ url_for('analytics') }}">Analytics</a>
     <a href="{{ url_for('alerts') }}">Alerts</a>
     <a href="{{ url_for('student_view') }}">Student view</a>
+    {% if current_user.role == 'admin' %}
+    <a href="{{ url_for('admin') }}">Admin</a>
+    {% endif %}
   </nav>
   <div class="userchip">
-    <span>{{ current_user.name }}</span>
+    <span>{{ current_user.name }}{% if current_user.role == 'admin' %} · admin{% endif %}</span>
     <a class="btn btn-ghost btn-sm" href="{{ url_for('logout') }}">Logout</a>
   </div>
   {% endif %}

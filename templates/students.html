@@ -9,6 +9,7 @@
 <div class="card">
   <h2>➕ Enroll a student</h2>
   <form method="post" enctype="multipart/form-data" class="upload-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Roll number<input name="student_id" placeholder="ST007" required></label>
     <label>First name<input name="first_name" placeholder="Priya" required></label>
     <label>Last name<input name="last_name" placeholder="Patel" required></label>

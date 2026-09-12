@@ -5,6 +5,7 @@
   <h1>🎓 AutoAttendance</h1>
   <p class="muted">AI suggests · teacher decides. Sign in to take attendance.</p>
   <form method="post" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Email
       <input type="email" name="email" required autofocus
              value="teacher@college.edu">
@@ -14,7 +15,8 @@
     </label>
     <button class="btn btn-primary" type="submit">Sign in</button>
   </form>
-  <p class="hint">Demo credentials are pre-filled:<br>
-     <code>teacher@college.edu</code> / <code>teacher123</code></p>
+  <p class="hint">Demo accounts (pre-filled):<br>
+     <code>teacher@college.edu</code> — admin<br>
+     <code>arjun@college.edu</code> — teacher (ML only) / <code>teacher123</code></p>
 </div>
 {% endblock %}
