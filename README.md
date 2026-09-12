@@ -2,8 +2,8 @@
 
 AI-suggested, teacher-verified attendance from classroom photos (Human-in-the-Loop).
 
-**Status:** ✅ Phase 1 (environment) + ✅ Phase 2 (face engine) — built & tested.
-**Next:** Phase 3 — Flask web app (upload → verification UI → database).
+**Status:** ✅ Phase 1 (environment) · ✅ Phase 2 (face engine) · ✅ Phase 3 (Flask web app) — built & tested.
+**Next:** Phase 4-5 — low-attendance alerts, report export, deployment.
 
 ---
 

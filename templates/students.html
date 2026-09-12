@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Students · Attendance{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Students</h1>
+  <p class="muted">Roster with live attendance % — enroll new students with a portrait photo.</p>
+</div>
+
+<div class="card">
+  <h2>➕ Enroll a student</h2>
+  <form method="post" enctype="multipart/form-data" class="upload-form">
+    <label>Roll number<input name="student_id" placeholder="ST007" required></label>
+    <label>First name<input name="first_name" placeholder="Priya" required></label>
+    <label>Last name<input name="last_name" placeholder="Patel" required></label>
+    <label>Department<input name="department" placeholder="Computer Engineering"></label>
+    <label>Semester<input name="semester" placeholder="Sem 5"></label>
+    <label>Email<input name="email" type="email" placeholder="optional"></label>
+    <label>Portrait photo <span class="muted small">(clear, front-facing)</span>
+      <input type="file" name="photo" accept="image/jpeg,image/png" required>
+    </label>
+    <button class="btn btn-primary" type="submit">Enroll + encode face</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Roster ({{ roster|length }})</h2>
+  <table>
+    <tr><th></th><th>Roll</th><th>Name</th><th>Dept</th><th>Sem</th><th>Attendance</th></tr>
+    {% for s in roster %}
+    {% set pct, present, total = stats[s.id] %}
+    <tr>
+      <td>
+        {% if s.photo_path %}
+        <img class="thumb" src="{{ url_for('photo', name=s.photo_path) }}" alt="{{ s.full_name }}">
+        {% else %}<div class="thumb noimg">?</div>{% endif %}
+      </td>
+      <td><code>{{ s.student_id }}</code></td>
+      <td>{{ s.full_name }}</td>
+      <td class="muted">{{ s.department or '—' }}</td>
+      <td class="muted">{{ s.semester or '—' }}</td>
+      <td>
+        {% if total %}
+        <div class="simbar"><span class="{{ 'bar-good' if pct >= threshold else ('bar-mid' if pct >= 50 else 'bar-bad') }}"
+              style="width: {{ pct }}%"></span></div>
+        <span class="small {{ 'risk' if pct < threshold else 'muted' }}">{{ '%.0f'|format(pct) }}% ({{ present }}/{{ total }})</span>
+        {% else %}<span class="muted small">no classes yet</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

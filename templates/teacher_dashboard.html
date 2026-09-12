@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · Attendance{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Teacher dashboard</h1>
+  <p class="muted">Upload a classroom photo — AI pre-fills attendance, you confirm it.</p>
+</div>
+
+<div class="statrow">
+  <div class="stat">
+    <div class="stat-num">{{ today_present }}<span class="muted">/{{ today_total }}</span></div>
+    <div class="stat-label">marked present today</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">{{ subjects|length }}</div>
+    <div class="stat-label">subjects you teach</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">{{ threshold }}%</div>
+    <div class="stat-label">at-risk attendance line</div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>📸 Take attendance</h2>
+  <form method="post" action="{{ url_for('take_attendance') }}"
+        enctype="multipart/form-data" class="upload-form">
+    <label>Subject
+      <select name="subject_id" required>
+        {% for s in subjects %}
+          <option value="{{ s.id }}">{{ s.code }} — {{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Classroom photo
+      <input type="file" name="photo" accept="image/jpeg,image/png">
+    </label>
+    <button class="btn btn-primary" type="submit">Analyze photo →</button>
+    <button class="btn btn-ghost" type="submit" name="demo_photo" value="1">Try the demo photo →</button>
+  </form>
+  <p class="hint">No photo handy? <strong>“Try the demo photo”</strong> runs the bundled 6-student
+    classroom shot through the AI. Otherwise upload any group photo — the AI sorts faces into
+    <span class="chip chip-green">auto-approved</span>
+    <span class="chip chip-amber">needs review</span>
+    <span class="chip chip-red">unknown</span> — then you decide on the next screen.</p>
+</div>
+
+<div class="card">
+  <h2>Recent sessions</h2>
+  {% if recent %}
+  <table>
+    <tr><th>When</th><th>Subject</th><th>Present</th><th>Status</th><th></th></tr>
+    {% for s in recent %}
+    <tr>
+      <td>{{ s.created_at.strftime('%d %b %H:%M') }}</td>
+      <td>{{ s.subject.code }}</td>
+      <td>{{ recent_stats[s.id].present }}/{{ recent_stats[s.id].total or '—' }}</td>
+      <td>
+        {% if s.status == 'verified' %}
+          <span class="chip chip-green">verified</span>
+        {% else %}
+          <span class="chip chip-amber">pending</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if s.status == 'verified' %}
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('session_detail', sid=s.id) }}">View</a>
+        {% else %}
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('verify', sid=s.id) }}">Verify →</a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+    <p class="muted">No sessions yet — upload your first classroom photo above.</p>
+  {% endif %}
+</div>
+{% endblock %}

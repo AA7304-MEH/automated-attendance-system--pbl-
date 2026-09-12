@@ -26,6 +26,14 @@ AUTO_APPROVE_DISTANCE = 0.45  # distance <= this  -> high confidence, auto-mark 
 DEFAULT_FACE_MODEL = "hog"    # "hog" = fast CPU detection | "cnn" = GPU, more accurate
 NUM_JITTERS = 1               # encoding resampling; higher = slower but stabler
 
+# Attendance below this % flags a student as at-risk (analytics + alerts)
+ATTENDANCE_THRESHOLD = 75.0
+
+# Web app
+RUNTIME_UPLOADS_DIR = UPLOADS_DIR / "incoming"   # per-request classroom photos
+WEB_SESSIONS_DIR = OUTPUTS_DIR / "web"           # face crops + annotated images
+ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
+
 # Created at import time so scripts can always write here.
 for _d in (DATA_DIR, STUDENT_FACES_DIR, UPLOADS_DIR, OUTPUTS_DIR):
     _d.mkdir(parents=True, exist_ok=True)

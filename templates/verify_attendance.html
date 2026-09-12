@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Verify · Attendance{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Verify attendance <span class="tag">{{ sess.subject.code }}</span></h1>
+  <p class="muted">
+    {{ faces_detected }} face(s) detected · {{ roster_total }} students on roster ·
+    AI pre-marked the green ones — <strong>your call overrides everything</strong>.
+  </p>
+</div>
+
+<div class="legend">
+  <span class="chip chip-green">auto-approved: {{ counts.get('auto_approved', 0) }}</span>
+  <span class="chip chip-amber">needs review: {{ counts.get('needs_review', 0) }}</span>
+  <span class="chip chip-red">unknown: {{ counts.get('unknown', 0) }}</span>
+  <span class="chip chip-gray">absent by default: everyone unmarked</span>
+</div>
+
+{% if annotated %}
+<div class="card">
+  <h2>What the AI saw</h2>
+  <img class="annotated" src="{{ url_for('media', sid=sess.id, name=annotated) }}"
+       alt="Annotated classroom photo">
+</div>
+{% endif %}
+
+<form method="post" action="{{ url_for('confirm', sid=sess.id) }}">
+
+  {% set autos = items | selectattr('status', 'equalto', 'auto_approved') | list %}
+  {% if autos %}
+  <div class="card section-green">
+    <h2>✅ Auto-approved <span class="muted small">— high-confidence matches, pre-checked</span></h2>
+    <div class="face-grid">
+      {% for it in autos %}
+      <div class="face-card fc-green">
+        <img src="{{ url_for('media', sid=sess.id, name=it.crop) }}" alt="detected face">
+        <div class="face-name">{{ it.reg_name or it.ai_student_id }}</div>
+        <div class="face-id muted">{{ it.ai_student_id }}</div>
+        <div class="simbar"><span style="width: {{ it.similarity }}%"></span></div>
+        <div class="muted small">{{ it.similarity }}% match</div>
+        <input type="hidden" name="student_{{ it.i }}" value="{{ it.ai_student_id }}">
+        <label class="chk"><input type="checkbox" name="present_{{ it.i }}" checked> Present</label>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% set reviews = items | selectattr('status', 'equalto', 'needs_review') | list %}
+  {% if reviews %}
+  <div class="card section-amber">
+    <h2>🔄 Needs review <span class="muted small">— AI has a guess; confirm or correct it</span></h2>
+    <div class="face-grid">
+      {% for it in reviews %}
+      <div class="face-card fc-amber">
+        <div class="vs-row">
+          <figure>
+            <img src="{{ url_for('media', sid=sess.id, name=it.crop) }}" alt="detected face">
+            <figcaption>in photo · {{ it.similarity }}%</figcaption>
+          </figure>
+          <div class="vs">VS</div>
+          <figure>
+            {% if it.reg_photo %}
+            <img src="{{ url_for('photo', name=it.reg_photo) }}" alt="registered photo">
+            {% else %}<div class="noimg">?</div>{% endif %}
+            <figcaption>{{ it.reg_name or 'AI guess' }}</figcaption>
+          </figure>
+        </div>
+        <label class="small muted">Identity (change to correct the AI)
+          <select name="student_{{ it.i }}">
+            {% for o in it.options %}
+            <option value="{{ o.student_id }}" {% if o.student_id == it.ai_student_id %}selected{% endif %}>
+              {{ o.student_id }} — {{ o.full_name }}{% if o.student_id == it.ai_student_id %} (AI guess {{ it.similarity }}%){% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="chk"><input type="checkbox" name="present_{{ it.i }}" checked> Present as selected</label>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% set unknowns = items | selectattr('status', 'equalto', 'unknown') | list %}
+  {% if unknowns %}
+  <div class="card section-red">
+    <h2>❓ Unknown faces <span class="muted small">— assign a student or leave absent</span></h2>
+    <div class="face-grid">
+      {% for it in unknowns %}
+      <div class="face-card fc-red">
+        <img src="{{ url_for('media', sid=sess.id, name=it.crop) }}" alt="unknown face">
+        <label class="small muted">Assign to student
+          <select name="student_{{ it.i }}">
+            <option value="">— leave unassigned —</option>
+            {% for o in it.options %}
+            <option value="{{ o.student_id }}">{{ o.student_id }} — {{ o.full_name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="chk"><input type="checkbox" name="present_{{ it.i }}"> Present</label>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if unmatched %}
+  <div class="card">
+    <h2>✍️ Also present? <span class="muted small">— students the photo missed (e.g. face too small/blurred)</span></h2>
+    <label>Hold Ctrl / Cmd to select several
+      <select name="extra_present" multiple size="{{ [unmatched|length, 6] | min }}">
+        {% for o in unmatched %}
+        <option value="{{ o.student_id }}">{{ o.student_id }} — {{ o.full_name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  {% endif %}
+
+  <div class="confirm-bar">
+    <span>Everyone not marked above will be recorded <strong>Absent</strong> for {{ sess.subject.code }}.</span>
+    <button class="btn btn-primary btn-lg" type="submit">💾 Confirm attendance</button>
+  </div>
+</form>
+{% endblock %}

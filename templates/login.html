@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Login · Attendance System{% endblock %}
+{% block content %}
+<div class="login-card">
+  <h1>🎓 AutoAttendance</h1>
+  <p class="muted">AI suggests · teacher decides. Sign in to take attendance.</p>
+  <form method="post" class="stack">
+    <label>Email
+      <input type="email" name="email" required autofocus
+             value="teacher@college.edu">
+    </label>
+    <label>Password
+      <input type="password" name="password" required value="teacher123">
+    </label>
+    <button class="btn btn-primary" type="submit">Sign in</button>
+  </form>
+  <p class="hint">Demo credentials are pre-filled:<br>
+     <code>teacher@college.edu</code> / <code>teacher123</code></p>
+</div>
+{% endblock %}

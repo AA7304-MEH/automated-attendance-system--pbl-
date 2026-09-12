@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Analytics · Attendance{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Analytics</h1>
+  <p class="muted">Overall, per-student, per-subject and daily trends · at-risk below {{ threshold }}%.</p>
+</div>
+
+{% if empty %}
+<div class="card"><p class="muted">No attendance recorded yet — take a class first.</p></div>
+{% else %}
+
+<div class="statrow">
+  <div class="stat">
+    <div class="donut" style="background: conic-gradient(#18a058 {{ '%.1f'|format(overall_pct) }}%, #e7eaf1 0)">
+      <div class="donut-hole">{{ '%.0f'|format(overall_pct) }}%</div>
+    </div>
+    <div class="stat-label">overall attendance ({{ total_present }}/{{ total_marks }} marks)</div>
+  </div>
+  <div class="stat">
+    <div class="donut" style="background: conic-gradient(#3b6ef5 {{ '%.1f'|format(today_pct if today_pct is not none else 0) }}%, #e7eaf1 0)">
+      <div class="donut-hole">{{ '%.0f'|format(today_pct) if today_pct is not none else '—' }}</div>
+    </div>
+    <div class="stat-label">today ({{ today_present }}/{{ today_total }})</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">{{ at_risk|length }}</div>
+    <div class="stat-label">students at risk (&lt; {{ threshold }}%)</div>
+  </div>
+</div>
+
+{% if at_risk %}
+<div class="card section-red">
+  <h2>🚨 At-risk students</h2>
+  <div class="pillrow">
+    {% for s in at_risk %}
+    <span class="pill pill-bad">{{ s.student.student_id }} · {{ s.student.full_name }} — {{ '%.0f'|format(s.pct) }}%</span>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>📈 Daily attendance trend</h2>
+  {{ trend_svg | safe }}
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <h2>👤 Per student</h2>
+    <table>
+      <tr><th>Student</th><th>Attendance</th></tr>
+      {% for s in student_stats %}
+      <tr>
+        <td><code>{{ s.student.student_id if s.student else '?' }}</code> {{ s.student.full_name if s.student else '' }}</td>
+        <td>
+          <div class="simbar"><span class="{{ 'bar-good' if s.pct >= threshold else ('bar-mid' if s.pct >= 50 else 'bar-bad') }}"
+                style="width: {{ s.pct }}%"></span></div>
+          <span class="small {{ 'risk' if s.pct < threshold else 'muted' }}">{{ '%.0f'|format(s.pct) }}% ({{ s.present }}/{{ s.total }})</span>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>📚 Per subject</h2>
+    <table>
+      <tr><th>Subject</th><th>Attendance</th></tr>
+      {% for r in subject_rows %}
+      <tr>
+        <td><code>{{ r.subject.code }}</code> {{ r.subject.name }}</td>
+        <td>
+          <div class="simbar"><span class="{{ 'bar-good' if r.pct >= threshold else ('bar-mid' if r.pct >= 50 else 'bar-bad') }}"
+                style="width: {{ r.pct }}%"></span></div>
+          <span class="small {{ 'risk' if r.pct < threshold else 'muted' }}">{{ '%.0f'|format(r.pct) }}% ({{ r.present }}/{{ r.total }})</span>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

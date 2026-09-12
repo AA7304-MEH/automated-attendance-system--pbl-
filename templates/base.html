@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Attendance System{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="{{ url_for('dashboard') }}">
+    <span class="brand-badge">🎓</span> AutoAttendance
+    <span class="tag">HITL demo</span>
+  </a>
+  {% if current_user.is_authenticated %}
+  <nav>
+    <a href="{{ url_for('dashboard') }}">Dashboard</a>
+    <a href="{{ url_for('students') }}">Students</a>
+    <a href="{{ url_for('analytics') }}">Analytics</a>
+    <a href="{{ url_for('student_view') }}">Student view</a>
+  </nav>
+  <div class="userchip">
+    <span>{{ current_user.name }}</span>
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('logout') }}">Logout</a>
+  </div>
+  {% endif %}
+</header>
+
+<main class="wrap">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="flash flash-{{ cat }}">{{ '✅' if cat == 'ok' else '⚠️' }} {{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="foot">
+  Demo system · all student faces are AI-generated (no real biometrics) ·
+  teacher is the final authority on every attendance mark
+</footer>
+</body>
+</html>

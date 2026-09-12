@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Session · Attendance{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Session #{{ sess.id }} <span class="tag">{{ sess.subject.code }} — {{ sess.subject.name }}</span></h1>
+  <p class="muted">
+    {{ sess.created_at.strftime('%d %b %Y, %H:%M') }} · verified
+    {{ sess.decided_at.strftime('%d %b %Y, %H:%M') if sess.decided_at else '' }} by {{ current_user.name }}
+  </p>
+</div>
+
+{% if results.get('annotated') and sess.photo_path %}
+<div class="card">
+  <h2>Annotated photo</h2>
+  <img class="annotated" src="{{ url_for('media', sid=sess.id, name=results['annotated']) }}"
+       alt="annotated photo">
+</div>
+{% endif %}
+
+<div class="card section-green">
+  <h2>✅ Present ({{ present|length }})</h2>
+  <div class="face-grid">
+    {% for m in present %}
+    <div class="face-card fc-green">
+      {% if m.student.photo_path %}
+      <img src="{{ url_for('photo', name=m.student.photo_path) }}" alt="{{ m.student.full_name }}">
+      {% endif %}
+      <div class="face-name">{{ m.student.full_name }}</div>
+      <div class="face-id muted">{{ m.student.student_id }}</div>
+      <div class="method">
+        {% if m.method == 'auto' %}<span class="chip chip-green">auto {{ '%.0f'|format(m.confidence or 0) }}%</span>
+        {% elif m.method == 'review' %}<span class="chip chip-amber">review {{ '%.0f'|format(m.confidence or 0) }}%</span>
+        {% else %}<span class="chip chip-gray">manual</span>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card section-red">
+  <h2>❌ Absent ({{ absent|length }})</h2>
+  <div class="pillrow">
+    {% for m in absent %}
+      <span class="pill">{{ m.student.student_id }} · {{ m.student.full_name }}</span>
+    {% endfor %}
+  </div>
+</div>
+
+<a class="btn btn-ghost" href="{{ url_for('dashboard') }}">← Back to dashboard</a>
+{% endblock %}

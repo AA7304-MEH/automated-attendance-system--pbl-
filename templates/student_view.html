@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Student view · Attendance{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Student view <span class="tag">read-only</span></h1>
+  <p class="muted">Look up any student's attendance by roll number.</p>
+</div>
+
+<div class="card">
+  <form method="get" class="inline-form">
+    <input name="student_id" placeholder="e.g. ST005" value="{{ sid }}" required>
+    <button class="btn btn-primary" type="submit">Check attendance</button>
+  </form>
+</div>
+
+{% if student %}
+<div class="statrow">
+  <div class="stat">
+    <div class="donut" style="background: conic-gradient({{ '#18a058' if pct >= threshold else ('#e8930c' if pct >= 50 else '#d64545') }} {{ '%.1f'|format(pct) }}%, #e7eaf1 0)">
+      <div class="donut-hole">{{ '%.0f'|format(pct) }}%</div>
+    </div>
+    <div class="stat-label">{{ present }}/{{ total }} classes present</div>
+  </div>
+  <div class="stat stat-wide">
+    <div class="stat-num">{{ student.full_name }}</div>
+    <div class="stat-label"><code>{{ student.student_id }}</code> · {{ student.department or '' }} · {{ student.semester or '' }}</div>
+    {% if pct < threshold %}<div class="chip chip-red">⚠️ at-risk — below {{ threshold }}%</div>
+    {% else %}<div class="chip chip-green">attendance healthy</div>{% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>History</h2>
+  <table>
+    <tr><th>Date</th><th>Time</th><th>Subject</th><th>Status</th><th>Marked by</th></tr>
+    {% for m in rows %}
+    <tr>
+      <td>{{ m.date.strftime('%d %b %Y') }}</td>
+      <td class="muted">{{ m.time.strftime('%H:%M') }}</td>
+      <td>{{ m.subject.code }}</td>
+      <td>{% if m.status == 'Present' %}<span class="chip chip-green">Present</span>
+          {% else %}<span class="chip chip-red">Absent</span>{% endif %}</td>
+      <td class="muted small">
+        {% if m.method == 'auto' %}AI auto ({{ '%.0f'|format(m.confidence or 0) }}%)
+        {% elif m.method == 'review' %}AI review → teacher ({{ '%.0f'|format(m.confidence or 0) }}%)
+        {% elif m.method == 'manual' %}teacher manual
+        {% else %}—{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% elif sid %}
+<div class="card"><p class="muted">No student with roll number <code>{{ sid }}</code>.</p></div>
+{% endif %}
+{% endblock %}
