@@ -37,6 +37,7 @@ from flask import (
 from flask_login import (
     LoginManager, current_user, login_required, login_user, logout_user,
 )
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import (
     ALERT_RECIPIENTS, ATTENDANCE_THRESHOLD, AUTO_APPROVE_DISTANCE, BASE_DIR,
@@ -509,12 +510,14 @@ def students():
                 flash(f"Face enrollment failed: {exc}", "error")
                 return redirect(url_for("students"))
 
+        pin = request.form.get("portal_pin", "").strip() or "1234"
         db.session.add(Student(
             student_id=sid, first_name=first, last_name=last,
             email=request.form.get("email", "").strip() or None,
             department=request.form.get("department", "").strip() or None,
             semester=request.form.get("semester", "").strip() or None,
             photo_path=photo_name,
+            portal_pin=generate_password_hash(pin),
         ))
         db.session.commit()
         flash(f"Enrolled {first} {last} ({sid}) — face encoding saved.", "ok")
@@ -809,6 +812,65 @@ def admin_assign_subject(sid):
     teacher = db.session.get(Teacher, subject.teacher_id) if subject.teacher_id else None
     flash(f"{subject.code} reassigned to {teacher.name if teacher else 'nobody'}.", "ok")
     return redirect(url_for("admin"))
+
+
+# ---------------------------------------------------------------------------
+# Student self-service portal (Phase 6, public read-only)
+# ---------------------------------------------------------------------------
+@app.route("/me", methods=["GET", "POST"])
+def student_portal():
+    """Roll number + PIN -> read-only personal attendance. No staff login needed.
+
+    PINs are stored hashed (demo default 1234, set at enrollment). Failed
+    attempts share the per-IP login rate limit; failures never reveal whether
+    the roll number exists.
+    """
+    if request.method == "POST":
+        ip = request.remote_addr or "unknown"
+        key = f"portal:{ip}"
+        _prune_fails(key)
+        if len(_failed_logins[key]) >= LOGIN_MAX_ATTEMPTS:
+            flash(
+                f"Too many attempts — wait {LOGIN_WINDOW_SECONDS}s and try again.",
+                "error",
+            )
+            return redirect(url_for("student_portal"))
+        sid = request.form.get("student_id", "").strip().upper()
+        pin = request.form.get("pin", "").strip()
+        student = Student.query.filter_by(student_id=sid, active=True).first()
+        ok = False
+        if student and student.portal_pin and pin:
+            try:
+                ok = check_password_hash(student.portal_pin, pin)
+            except ValueError:
+                ok = False
+        if not ok:
+            _failed_logins[key].append(time.time())
+            flash("Invalid roll number or PIN.", "error")
+            return redirect(url_for("student_portal"))
+        _failed_logins.pop(key, None)
+
+        rows = (Attendance.query.filter_by(student_id=student.id)
+                .order_by(Attendance.date.desc(), Attendance.time.desc()).all())
+        pct, present, total = student_pct(rows)
+        per_subject = defaultdict(lambda: [0, 0])
+        for m in rows:
+            per_subject[m.subject_id][1] += 1
+            if m.status == "Present":
+                per_subject[m.subject_id][0] += 1
+        subjects = {s.id: s for s in Subject.query.all()}
+        subject_rows = sorted(
+            ({"subject": subjects[s_id], "present": v[0], "total": v[1],
+              "pct": v[0] / v[1] * 100 if v[1] else 0}
+             for s_id, v in per_subject.items()),
+            key=lambda x: -(x["pct"] or 0),
+        )
+        return render_template(
+            "portal.html", student=student, rows=rows[:40],
+            pct=pct, present=present, total=total,
+            subject_rows=subject_rows, threshold=ATTENDANCE_THRESHOLD,
+        )
+    return render_template("portal.html", student=None)
 
 
 # ---------------------------------------------------------------------------

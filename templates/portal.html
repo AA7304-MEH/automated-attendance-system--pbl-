@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Student portal · Attendance{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Student portal <span class="tag">read-only</span></h1>
+  <p class="muted">Check your own attendance — roll number + PIN. (Demo PIN: <code>1234</code>.)</p>
+</div>
+
+<div class="card">
+  <form method="post" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input name="student_id" placeholder="Roll number, e.g. ST001" required>
+    <input name="pin" type="password" placeholder="PIN" required>
+    <button class="btn btn-primary" type="submit">View my attendance</button>
+  </form>
+</div>
+
+{% if student %}
+<div class="statrow">
+  <div class="stat">
+    <div class="donut" style="background: conic-gradient({{ '#18a058' if pct >= threshold else ('#e8930c' if pct >= 50 else '#d64545') }} {{ '%.1f'|format(pct) }}%, #e7eaf1 0)">
+      <div class="donut-hole">{{ '%.0f'|format(pct) }}%</div>
+    </div>
+    <div class="stat-label">{{ present }}/{{ total }} classes present</div>
+  </div>
+  <div class="stat stat-wide">
+    <div class="stat-num">{{ student.full_name }}</div>
+    <div class="stat-label"><code>{{ student.student_id }}</code> · {{ student.department or '' }} · {{ student.semester or '' }}</div>
+    {% if pct < threshold %}
+      <div class="chip chip-red">⚠️ You are below the {{ threshold }}% attendance requirement — please contact your class teacher</div>
+    {% else %}
+      <div class="chip chip-green">Your attendance is healthy</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>Subject-wise</h2>
+  <table>
+    <tr><th>Subject</th><th>Attendance</th></tr>
+    {% for r in subject_rows %}
+    <tr>
+      <td><code>{{ r.subject.code }}</code> {{ r.subject.name }}</td>
+      <td>
+        <div class="simbar"><span class="{{ 'bar-good' if r.pct >= threshold else ('bar-mid' if r.pct >= 50 else 'bar-bad') }}" style="width: {{ r.pct }}%"></span></div>
+        <span class="small {{ 'risk' if r.pct < threshold else 'muted' }}">{{ '%.0f'|format(r.pct) }}% ({{ r.present }}/{{ r.total }})</span>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h2>Recent history</h2>
+  <table>
+    <tr><th>Date</th><th>Time</th><th>Subject</th><th>Status</th></tr>
+    {% for m in rows %}
+    <tr>
+      <td>{{ m.date.strftime('%d %b %Y') }}</td>
+      <td class="muted">{{ m.time.strftime('%H:%M') }}</td>
+      <td>{{ m.subject.code }}</td>
+      <td>{% if m.status == 'Present' %}<span class="chip chip-green">Present</span>
+          {% else %}<span class="chip chip-red">Absent</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p class="hint">Disagree with a mark? Contact your teacher — corrections are their call.</p>
+</div>
+{% endif %}
+{% endblock %}

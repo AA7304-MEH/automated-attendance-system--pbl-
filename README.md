@@ -2,8 +2,8 @@
 
 AI-suggested, teacher-verified attendance from classroom photos (Human-in-the-Loop).
 
-**Status:** ✅ Phase 1 (environment) · ✅ Phase 2 (face engine) · ✅ Phase 3 (Flask web app) · ✅ Phase 4 (exports, alerts, Docker) · ✅ Phase 5 (email digests, multi-teacher + admin, security hardening).
-**Next:** real SMTP credentials, deployment to a server, optional InsightFace accuracy upgrade.
+**Status:** ✅ Phase 1 (environment) · ✅ Phase 2 (face engine) · ✅ Phase 3 (Flask web app) · ✅ Phase 4 (exports, alerts, Docker) · ✅ Phase 5 (email digests, multi-teacher + admin, security hardening) · ✅ Phase 6 (student self-service portal, project report).
+**Next:** real SMTP credentials, public HTTPS deployment, optional InsightFace accuracy upgrade.
 
 ---
 
@@ -137,9 +137,21 @@ setup hit three traps, all solved and automated in `setup_env.sh`:
   (5 failures/min), SameSite=Lax + HttpOnly session cookies, ownership checks
   on attendance sessions.
 
-## Phase 6 ideas (next)
+## Student self-service portal (Phase 6)
 
-- Real SMTP credentials + scheduled delivery on a server
+Public read-only page at **`/me`**: students enter their roll number + PIN
+(hashed in the DB; demo PIN `1234`) to see their attendance %, subject-wise
+breakdown, recent history and an at-risk warning — no staff login involved.
+Failed attempts share the login rate limit, and errors never reveal whether a
+roll number exists.
+
+**Formal write-up:** the submission-ready project report (architecture,
+methodology, measured accuracy numbers, security, testing) lives in
+[`docs/PROJECT_REPORT.md`](docs/PROJECT_REPORT.md).
+
+## Phase 7 ideas (next)
+
+- Admin UI for portal-PIN resets; liveness detection; real SMTP creds on a server
 - Public HTTPS deployment (reverse proxy + domain) using the Dockerfile
 - Optional accuracy upgrade: InsightFace/YOLOv8 engine behind the same interface
 - Student self-service login (OAuth or roll-number + OTP)

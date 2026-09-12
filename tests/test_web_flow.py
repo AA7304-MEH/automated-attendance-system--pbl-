@@ -254,6 +254,21 @@ def main():
     r = login(t3, "sneha@college.edu", "sneha123")
     check("new teacher can log in", b"Teacher dashboard" in r.data)
 
+    print("Student portal (Phase 6)")
+    p = app.test_client()
+    r = p.get("/me")
+    check("portal page is public", r.status_code == 200 and b"Student portal" in r.data)
+    tok = re.search(r'name="csrf_token" value="([^"]+)"', r.data.decode()).group(1)
+    r = p.post("/me", data={"student_id": "ST001", "pin": "9999", "csrf_token": tok},
+               follow_redirects=True)
+    check("wrong PIN -> generic error", b"Invalid roll number or PIN" in r.data)
+    r = p.post("/me", data={"student_id": "st001", "pin": "1234", "csrf_token": tok},
+               follow_redirects=True)
+    check("correct PIN -> personal attendance", b"Aarav Sharma" in r.data and
+          b"classes present" in r.data)
+    check("portal shows subject breakdown", b"CS201" in r.data)
+    check("portal flags at-risk student", b"below the" in r.data or b"healthy" in r.data)
+
     print("Media access control")
     r = c.get("/media/1/face_0.jpg")
     check("logged-in can view session media", r.status_code == 200)

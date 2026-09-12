@@ -1,4 +1,4 @@
-"""Idempotent demo seeding + lightweight migration.
+"""Idempotent demo seeding + lightweight migrations.
 
 Demo staff (all synthetic):
     Dr. Kavita Rao   admin   teacher@college.edu / teacher123
@@ -6,17 +6,23 @@ Demo staff (all synthetic):
 
 6 AI-generated students, 3 subjects, ~3 weeks of deterministic history
 (ST005 is a chronic absentee so the at-risk views have real data).
+Every demo student gets portal PIN "1234" (hashed).
 
-Migration: databases created before Phase 5 lack teachers.role — we ALTER in
-place and promote the first teacher to admin.
+Migrations for databases created in earlier phases:
+    - teachers.role (Phase 5)
+    - students.portal_pin (Phase 6) — backfilled with hash of "1234"
 """
 
 import random
 from datetime import date, time, timedelta
 
+from werkzeug.security import generate_password_hash
+
 from config import ENCODINGS_PATH, STUDENT_FACES_DIR
 from face_engine.encoder import FaceEncodingStore
 from .models import db, Teacher, Student, Subject, Attendance
+
+DEFAULT_PORTAL_PIN = "1234"
 
 DEMO_ADMIN = {"name": "Dr. Kavita Rao", "email": "teacher@college.edu",
               "password": "teacher123", "role": "admin"}
@@ -58,10 +64,14 @@ def ensure_encodings():
     return len(store)
 
 
+def _table_columns(conn, table):
+    return [row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})")]
+
+
 def _migrate(app):
-    """Add teachers.role to pre-Phase-5 databases and promote the first teacher."""
+    """Add columns introduced in later phases to pre-existing databases."""
     with db.engine.connect() as conn:
-        cols = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(teachers)")]
+        cols = _table_columns(conn, "teachers")
         if "role" not in cols:
             conn.exec_driver_sql(
                 "ALTER TABLE teachers ADD COLUMN role VARCHAR(10) "
@@ -69,11 +79,27 @@ def _migrate(app):
             )
             conn.commit()
             app.logger.info("migrated teachers table: added role column")
+        if "portal_pin" not in _table_columns(conn, "students"):
+            conn.exec_driver_sql("ALTER TABLE students ADD COLUMN portal_pin VARCHAR(200)")
+            conn.commit()
+            app.logger.info("migrated students table: added portal_pin column")
+
     if not Teacher.query.filter_by(role="admin").first():
         first = Teacher.query.order_by(Teacher.id).first()
         if first:
             first.role = "admin"
             db.session.commit()
+
+    # backfill portal PINs so every student can use the portal
+    stale = Student.query.filter(
+        (Student.portal_pin.is_(None)) | (Student.portal_pin == "")
+    ).all()
+    if stale:
+        hashed = generate_password_hash(DEFAULT_PORTAL_PIN)
+        for s in stale:
+            s.portal_pin = hashed
+        db.session.commit()
+        app.logger.info("backfilled portal PIN for %d student(s)", len(stale))
 
 
 def ensure_demo_staff(app):
@@ -137,6 +163,7 @@ def seed_if_needed(app):
         ]
         db.session.add_all(subjects)
 
+        default_pin_hash = generate_password_hash(DEFAULT_PORTAL_PIN)
         students = []
         for sid, first, last, dept, sem in DEMO_STUDENTS:
             photo = f"{sid}.jpg" if (STUDENT_FACES_DIR / f"{sid}.jpg").exists() else None
@@ -145,6 +172,7 @@ def seed_if_needed(app):
                     student_id=sid, first_name=first, last_name=last,
                     email=f"{sid.lower()}@college.edu", department=dept,
                     semester=sem, photo_path=photo,
+                    portal_pin=default_pin_hash,
                 )
             )
         db.session.add_all(students)

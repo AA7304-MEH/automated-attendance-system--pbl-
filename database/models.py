@@ -56,6 +56,7 @@ class Student(db.Model):
     department = db.Column(db.String(50))
     semester = db.Column(db.String(20))
     photo_path = db.Column(db.String(200))          # filename inside data/student_faces/
+    portal_pin = db.Column(db.String(200))          # hashed PIN for the /me self-service portal
     active = db.Column(db.Boolean, default=True, nullable=False)
 
     marks = db.relationship("Attendance", backref="student", lazy=True)
