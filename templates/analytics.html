@@ -6,6 +6,12 @@
   <p class="muted">Overall, per-student, per-subject and daily trends · at-risk below {{ threshold }}%.</p>
 </div>
 
+<div class="card" style="display:flex; gap:10px; flex-wrap:wrap;">
+  <a class="btn btn-ghost" href="{{ url_for('export_attendance') }}">⬇ Raw attendance CSV</a>
+  <a class="btn btn-ghost" href="{{ url_for('export_students') }}">⬇ Student summary CSV</a>
+  <a class="btn btn-primary" href="{{ url_for('alerts') }}">🚨 Alerts dashboard</a>
+</div>
+
 {% if empty %}
 <div class="card"><p class="muted">No attendance recorded yet — take a class first.</p></div>
 {% else %}

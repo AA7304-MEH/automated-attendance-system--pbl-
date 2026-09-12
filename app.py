@@ -9,18 +9,20 @@ Run:  python app.py   → http://localhost:8000  (binds 0.0.0.0)
 Demo login: teacher@college.edu / teacher123 (seeded on first run)
 """
 
+import io
 import json
 import re
 import secrets
 import uuid
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import cv2
+import pandas as pd
 from flask import (
     Flask, abort, flash, redirect, render_template, request,
-    send_from_directory, url_for,
+    send_from_directory, url_for, Response,
 )
 from flask_login import (
     LoginManager, current_user, login_required, login_user, logout_user,
@@ -571,6 +573,121 @@ def student_view():
     return render_template(
         "student_view.html", sid=sid, student=student, rows=rows,
         pct=pct, present=present, total=total, threshold=ATTENDANCE_THRESHOLD,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Exports & alerts (Phase 4)
+# ---------------------------------------------------------------------------
+@app.route("/export/attendance.csv")
+@login_required
+def export_attendance():
+    """Raw attendance log, one row per mark."""
+    rows = (Attendance.query.join(Student, Attendance.student_id == Student.id)
+            .join(Subject, Attendance.subject_id == Subject.id)
+            .order_by(Attendance.date, Attendance.time).all())
+    df = pd.DataFrame([{
+        "date": r.date.isoformat(),
+        "time": r.time.strftime("%H:%M"),
+        "student_id": r.student.student_id,
+        "student_name": r.student.full_name,
+        "subject_code": r.subject.code,
+        "subject": r.subject.name,
+        "status": r.status,
+        "method": r.method,
+        "ai_confidence_pct": None if r.confidence is None else round(r.confidence, 1),
+        "verified_by": current_user.name,
+    } for r in rows])
+    buf = io.StringIO()
+    df.to_csv(buf, index=False)
+    return Response(
+        buf.getvalue(), mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=attendance_raw.csv"},
+    )
+
+
+def _student_summary():
+    """Per-student stats incl. recent-7-day trend and worst subject."""
+    marks = Attendance.query.all()
+    by_student = defaultdict(list)
+    for m in marks:
+        by_student[m.student_id].append(m)
+
+    today = now_ist().date()
+    week_start = today - timedelta(days=7)
+    students = {s.id: s for s in Student.query.filter_by(active=True)}
+    subjects = {s.id: s for s in Subject.query.all()}
+
+    out = []
+    for stu_id, rows in by_student.items():
+        stu = students.get(stu_id)
+        if not stu:
+            continue
+        pct, present, total = _student_pct(rows)
+        recent = [m for m in rows if m.date >= week_start]
+        r_pct, r_present, r_total = _student_pct(recent)
+
+        per_subj = defaultdict(lambda: [0, 0])
+        for m in rows:
+            per_subj[m.subject_id][1] += 1
+            if m.status == "Present":
+                per_subj[m.subject_id][0] += 1
+        worst = None
+        for s_id, (p, t) in per_subj.items():
+            if t >= 3 and (worst is None or p / t < worst[1]):
+                worst = (subjects[s_id].code, p / t)
+        out.append({
+            "student": stu, "pct": pct, "present": present, "total": total,
+            "recent_pct": r_pct, "recent_present": r_present, "recent_total": r_total,
+            "delta": r_pct - pct,
+            "worst_subject": f"{worst[0]} ({worst[1] * 100:.0f}%)" if worst else None,
+        })
+    out.sort(key=lambda x: x["pct"])
+    return out
+
+
+@app.route("/alerts")
+@login_required
+def alerts():
+    summary = _student_summary()
+    for s in summary:
+        d = s["delta"]
+        icon, color = ("→", "var(--muted)")
+        if d >= 2:
+            icon, color = ("▲ improving", "var(--green)")
+        elif d <= -2:
+            icon, color = ("▼ declining", "var(--red)")
+        s["trend_icon"] = f'<span style="color:{color};font-weight:700">{icon}</span>'
+
+    at_risk = [s for s in summary if s["pct"] < ATTENDANCE_THRESHOLD]
+    borderline = [s for s in summary if ATTENDANCE_THRESHOLD <= s["pct"] < ATTENDANCE_THRESHOLD + 10]
+    return render_template("alerts.html", at_risk=at_risk, borderline=borderline,
+                           threshold=ATTENDANCE_THRESHOLD)
+
+
+@app.route("/export/students.csv")
+@login_required
+def export_students():
+    """Per-student summary with at-risk flag."""
+    summary = _student_summary()
+    df = pd.DataFrame([{
+        "student_id": s["student"].student_id,
+        "name": s["student"].full_name,
+        "department": s["student"].department or "",
+        "semester": s["student"].semester or "",
+        "classes_total": s["total"],
+        "classes_present": s["present"],
+        "attendance_pct": round(s["pct"], 1),
+        "last7d_pct": round(s["recent_pct"], 1) if s["recent_total"] else "",
+        "trend_vs_overall_pct": round(s["delta"], 1) if s["recent_total"] else "",
+        "worst_subject": s["worst_subject"] or "",
+        "at_risk": "YES" if s["pct"] < ATTENDANCE_THRESHOLD else "no",
+    } for s in summary])
+    buf = io.StringIO()
+    df.to_csv(buf, index=False)
+    return Response(
+        buf.getvalue(), mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=students_summary.csv"},
     )
 
 

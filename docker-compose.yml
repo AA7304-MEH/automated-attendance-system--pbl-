@@ -1,0 +1,8 @@
+services:
+  attendance:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data     # persist DB, portraits & encodings across rebuilds
+    restart: unless-stopped

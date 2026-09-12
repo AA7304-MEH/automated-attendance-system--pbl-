@@ -8,6 +8,10 @@ pandas>=2.0
 flask>=3.0
 flask-sqlalchemy>=3.1
 flask-login>=0.6
+gunicorn>=21.0
+
+# CSV/analytics exports
+pandas>=2.0
 
 # NOTE: face-recognition installs dlib + face_recognition_models (~100 MB the
 # first time). Building dlib from source needs CMake + a C++ toolchain

@@ -2,8 +2,8 @@
 
 AI-suggested, teacher-verified attendance from classroom photos (Human-in-the-Loop).
 
-**Status:** ✅ Phase 1 (environment) · ✅ Phase 2 (face engine) · ✅ Phase 3 (Flask web app) — built & tested.
-**Next:** Phase 4-5 — low-attendance alerts, report export, deployment.
+**Status:** ✅ Phase 1 (environment) · ✅ Phase 2 (face engine) · ✅ Phase 3 (Flask web app) · ✅ Phase 4 (exports, alerts, Docker) — built & tested.
+**Next:** email/SMS alert delivery, multi-teacher accounts, production hardening.
 
 ---
 
@@ -103,11 +103,26 @@ setup hit three traps, all solved and automated in `setup_env.sh`:
 3. **`face_recognition_models` needs `pkg_resources`**, removed in
    setuptools ≥ 81 → pin `setuptools<81`.
 
-## Phase 3 plan (next)
+## Exports, alerts & deployment (Phase 4)
 
-- Flask app: login (teachers), photo upload, results page implementing the
-  verification UI (auto-approved ✅ / side-by-side confirm 🔄 / unknown dropdown)
-- SQLAlchemy models: `students`, `subjects`, `attendance` (with `confidence`,
-  `method`, `verified_by`), `teachers`
-- Analytics: per-student %, class trend, < 75% at-risk list; Chart.js frontend
-- Demo students ST001–ST006 seed the database; enrollment page for real photos
+- **CSV exports** (buttons on Analytics): `attendance_raw.csv` (every mark with
+  method + AI confidence) and `students_summary.csv` (per-student %, 7-day
+  trend, worst subject, at-risk flag).
+- **Alerts dashboard** (`/alerts`): at-risk (< 75%) and borderline (< 85%)
+  tables with last-7-day trend arrows (▲ improving / ▼ declining) and each
+  student's worst subject — the daily to-do list for the teacher.
+- **Docker** (also works with `docker compose up`):
+  ```bash
+  docker build -t autoattendance .
+  docker run -p 8000:8000 -v $(pwd)/data:/app/data autoattendance
+  ```
+  First boot auto-seeds demo data and rebuilds the encoding DB; mount `data/`
+  to persist it. Production: serve behind a reverse proxy with HTTPS.
+
+## Phase 5 ideas (next)
+
+- Email/SMS delivery of the at-risk digest (the query & page already exist —
+  wire a cron/APScheduler job to SMTP/Twilio)
+- Multiple teacher accounts + per-subject assignment; admin role
+- Production hardening: HTTPS, CSRF tokens, rate limiting
+- Optional accuracy upgrade: InsightFace/YOLOv8 engine behind the same interface

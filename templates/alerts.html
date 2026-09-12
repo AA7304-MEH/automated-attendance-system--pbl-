@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Alerts · Attendance{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Alerts</h1>
+  <p class="muted">
+    At-risk below {{ threshold }}% · borderline below {{ threshold + 10 }}% ·
+    <strong>trend</strong> = last 7 days vs overall average.
+  </p>
+</div>
+
+<div class="card">
+  <a class="btn btn-ghost" href="{{ url_for('export_students') }}">⬇ Download student summary CSV</a>
+</div>
+
+{% if at_risk %}
+<div class="card section-red">
+  <h2>🚨 At-risk students</h2>
+  <table>
+    <tr><th></th><th>Student</th><th>Overall</th><th>Last 7 days</th><th>Trend</th><th>Worst subject</th></tr>
+    {% for s in at_risk %}
+    <tr>
+      <td>{% if s.student.photo_path %}<img class="thumb" src="{{ url_for('photo', name=s.student.photo_path) }}" alt="">{% endif %}</td>
+      <td><code>{{ s.student.student_id }}</code> {{ s.student.full_name }}</td>
+      <td>
+        <div class="simbar"><span class="{{ 'bar-good' if s.pct >= threshold else ('bar-mid' if s.pct >= 50 else 'bar-bad') }}" style="width: {{ s.pct }}%"></span></div>
+        <span class="small risk">{{ '%.0f'|format(s.pct) }}% ({{ s.present }}/{{ s.total }})</span>
+      </td>
+      <td class="small">{{ '%.0f'|format(s.recent_pct) }}% ({{ s.recent_present }}/{{ s.recent_total }})</td>
+      <td>{{ s.trend_icon | safe }}</td>
+      <td class="small muted">{{ s.worst_subject or '—' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+{% if borderline %}
+<div class="card section-amber">
+  <h2>⚠️ Borderline — watch list</h2>
+  <table>
+    <tr><th></th><th>Student</th><th>Overall</th><th>Last 7 days</th><th>Trend</th><th>Worst subject</th></tr>
+    {% for s in borderline %}
+    <tr>
+      <td>{% if s.student.photo_path %}<img class="thumb" src="{{ url_for('photo', name=s.student.photo_path) }}" alt="">{% endif %}</td>
+      <td><code>{{ s.student.student_id }}</code> {{ s.student.full_name }}</td>
+      <td>
+        <div class="simbar"><span class="bar-mid" style="width: {{ s.pct }}%"></span></div>
+        <span class="small muted">{{ '%.0f'|format(s.pct) }}% ({{ s.present }}/{{ s.total }})</span>
+      </td>
+      <td class="small">{{ '%.0f'|format(s.recent_pct) }}% ({{ s.recent_present }}/{{ s.recent_total }})</td>
+      <td>{{ s.trend_icon | safe }}</td>
+      <td class="small muted">{{ s.worst_subject or '—' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+{% if not at_risk and not borderline %}
+<div class="card section-green">
+  <h2>🎉 Everyone is above the {{ threshold }}% line</h2>
+  <p class="muted">No alerts right now — keep it up.</p>
+</div>
+{% endif %}
+{% endblock %}

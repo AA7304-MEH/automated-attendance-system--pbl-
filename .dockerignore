@@ -1,0 +1,12 @@
+.git
+.gitignore
+__pycache__
+*.pyc
+venv/
+.venv/
+wheels/
+data/attendance.db
+data/outputs/
+data/uploads/incoming/
+.secret_key
+*.md

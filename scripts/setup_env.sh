@@ -30,7 +30,7 @@ need face_recognition || pip install -q --no-deps face_recognition face_recognit
 need click || pip install -q click
 # face_recognition_models (2017) still imports pkg_resources, removed in setuptools>=81
 python3 -c "import pkg_resources" 2>/dev/null || pip install -q "setuptools<81"
-need flask || pip install -q flask flask-sqlalchemy flask-login
+need flask || pip install -q flask flask-sqlalchemy flask-login gunicorn
 
 python3 - <<'PY'
 import cv2, numpy, dlib, face_recognition, flask

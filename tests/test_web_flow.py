@@ -180,6 +180,23 @@ def main():
     r = c.get("/student?student_id=ST999")
     check("unknown roll handled", b"No student" in r.data)
 
+    print("Exports & alerts (Phase 4)")
+    r = c.get("/export/attendance.csv")
+    check("raw attendance CSV downloads", r.status_code == 200 and
+          b"student_id,student_name" in r.data and r.mimetype == "text/csv")
+    check("CSV has data rows", r.data.count(b"Present") + r.data.count(b"Absent") > 10)
+    r = c.get("/export/students.csv")
+    check("student summary CSV downloads", r.status_code == 200 and
+          b"attendance_pct" in r.data and b"ST005" in r.data)
+    check("ST005 flagged at-risk in CSV",
+          b"ST005" in r.data and b",YES" in r.data)
+    r = c.get("/alerts")
+    check("alerts page renders", r.status_code == 200 and b"At-risk students" in r.data)
+    check("alerts lists ST005 with trend", b"ST005" in r.data and
+          (b"improving" in r.data or b"declining" in r.data))
+    r2 = app.test_client().get("/alerts")
+    check("alerts auth-protected", r2.status_code == 302)
+
     print("Media access control")
     r = c.get("/media/1/face_0.jpg")
     check("logged-in can view session media", r.status_code == 200)
