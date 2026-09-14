@@ -30,7 +30,7 @@ DEFAULT_FACE_MODEL = "hog"    # "hog" = fast CPU detection | "cnn" = GPU, more a
 NUM_JITTERS = 1               # encoding resampling; higher = slower but stabler
 
 # Attendance below this % flags a student as at-risk (analytics + alerts)
-ATTENDANCE_THRESHOLD = 75.0
+ATTENDANCE_THRESHOLD = 75  # int so UI headers render "75%", not "75.0%"
 # Students between THRESHOLD and THRESHOLD + BORDERLINE_BAND appear on the watch list
 BORDERLINE_BAND = 10.0
 
