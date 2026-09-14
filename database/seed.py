@@ -16,9 +16,15 @@ Migrations for databases created in earlier phases:
 import random
 from datetime import date, time, timedelta
 
+try:
+    import fcntl  # Unix: file locking for race-safe seeding
+except ImportError:  # pragma: no cover (Windows dev)
+    fcntl = None
+from sqlalchemy.exc import IntegrityError
+
 from werkzeug.security import generate_password_hash
 
-from config import ENCODINGS_PATH, STUDENT_FACES_DIR
+from config import DATA_DIR, ENCODINGS_PATH, STUDENT_FACES_DIR
 from face_engine.encoder import FaceEncodingStore
 from .models import db, Teacher, Student, Subject, Attendance
 
@@ -134,7 +140,7 @@ def ensure_demo_staff(app):
     return changed
 
 
-def seed_if_needed(app):
+def _seed_locked(app):
     with app.app_context():
         db.create_all()
         _migrate(app)
@@ -212,3 +218,24 @@ def seed_if_needed(app):
                         "%d attendance rows", len(subjects), len(students),
                         len(days) * len(subjects) * len(students))
         return True
+
+
+def seed_if_needed(app):
+    """Race-safe wrapper around _seed_locked: when several WSGI workers boot
+    at once, an exclusive file lock guarantees only one performs the seed
+    (prevents UNIQUE constraint crashes on first deploy)."""
+    lock_path = DATA_DIR / ".seed.lock"
+    with open(lock_path, "a") as lock:
+        if fcntl is not None:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            return _seed_locked(app)
+        except IntegrityError:
+            # Lost a race despite the lock (e.g. multi-host volume) — the
+            # other instance seeded; nothing for us to do.
+            db.session.rollback()
+            app.logger.warning("concurrent seeding detected — skipping")
+            return False
+        finally:
+            if fcntl is not None:
+                fcntl.flock(lock, fcntl.LOCK_UN)

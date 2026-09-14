@@ -64,7 +64,11 @@ app = Flask(__name__)
 
 _keyfile = BASE_DIR / ".secret_key"
 if not _keyfile.exists():
-    _keyfile.write_text(secrets.token_hex(32))
+    try:
+        with open(_keyfile, "x") as _kf:
+            _kf.write(secrets.token_hex(32))
+    except FileExistsError:
+        pass  # another worker created it first — read the same one below
 app.config["SECRET_KEY"] = _keyfile.read_text()
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB upload cap
