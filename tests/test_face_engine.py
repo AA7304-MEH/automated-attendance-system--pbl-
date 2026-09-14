@@ -83,5 +83,9 @@ def main():
     print("All tests passed ✅")
 
 
+def test_all():  # pytest entry — enables: pytest tests/ -v
+    main()
+
+
 if __name__ == "__main__":
     main()
