@@ -35,6 +35,11 @@ ATTENDANCE_THRESHOLD = 75  # int so UI headers render "75%", not "75.0%"
 BORDERLINE_BAND = 10.0
 
 # Web app
+# Optional external database (e.g. Render/Neon Postgres). Empty = local SQLite.
+_raw_db_url = os.environ.get("DATABASE_URL", "")
+if _raw_db_url.startswith("postgres://"):   # SQLAlchemy 2.x dialect name
+    _raw_db_url = _raw_db_url.replace("postgres://", "postgresql://", 1)
+DATABASE_URL = _raw_db_url
 RUNTIME_UPLOADS_DIR = UPLOADS_DIR / "incoming"   # per-request classroom photos
 WEB_SESSIONS_DIR = OUTPUTS_DIR / "web"           # face crops + annotated images
 ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png"}

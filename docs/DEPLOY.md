@@ -1,5 +1,40 @@
 # 🚀 Deployment Guide
 
+## ⭐ Option A+ — Render.com (exact walkthrough, free tier)
+
+1. Go to **render.com** → **Get Started** → sign in **with GitHub** (authorize Render).
+2. Dashboard → **New +** → **Web Service**.
+3. **Connect the repository** `AA7304-MEH/automated-attendance-system--pbl-`
+   (if it's not listed: "Configure account" → grant access to that repo).
+4. Fill the form:
+   - **Name:** `autoattendance` (the URL becomes `https://autoattendance.onrender.com`)
+   - **Region:** `Singapore` (lowest latency from India)
+   - **Branch:** `main` · **Runtime:** `Docker` (auto-detected from the Dockerfile)
+   - **Instance type:** `Free`
+5. **Environment variables → Add:**
+   - `WEB_CONCURRENCY` = `1`  (one gunicorn worker — the free 512 MB box is
+     too small for two; gunicorn reads this variable natively)
+6. Click **Create Web Service**. First build takes ~5–8 minutes
+   (it installs dlib + OpenCV inside the image). Watch the log — it ends with
+   "Booting worker" and the app auto-seeds the demo data on first boot.
+7. Open the Service URL → `/login` → sign in `teacher@college.edu / teacher123`.
+
+**Free-tier facts (honest):**
+- The service **sleeps after ~15 min idle**; the next visit takes ~50 s to wake.
+- Free instances have **no persistent disk**: every redeploy/reset wipes
+  `data/` — the app **auto-reseeds the demo** on boot, so demos still work;
+  any students YOU enrolled are lost. For persistence: upgrade the instance
+  to Starter and add a **Disk** mounted at `/app/data` (1 GB).
+- 512 MB RAM handles the 6-student demo photo fine; large 40+ face photos may
+  need the Starter (2 GB) instance.
+
+**Optional — real database instead of the disk:** create a free Postgres
+(Neon.com or Render Postgres) and add env var
+`DATABASE_URL = <the connection string>` — the app uses it automatically
+(no code change; the schema is created on first boot).
+
+---
+
 Four options, cheapest first. All use the same codebase; the only required
 external config is optional SMTP for emails.
 

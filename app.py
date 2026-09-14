@@ -41,7 +41,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import (
     ALERT_RECIPIENTS, ATTENDANCE_THRESHOLD, AUTO_APPROVE_DISTANCE, BASE_DIR,
-    DATA_DIR, ENCODINGS_PATH, FACE_MATCH_TOLERANCE, LOGIN_MAX_ATTEMPTS,
+    DATA_DIR, DATABASE_URL, ENCODINGS_PATH, FACE_MATCH_TOLERANCE,
+    LOGIN_MAX_ATTEMPTS,
     LOGIN_WINDOW_SECONDS, RUNTIME_UPLOADS_DIR, STUDENT_FACES_DIR, UPLOADS_DIR,
     WEB_SESSIONS_DIR,
 )
@@ -70,7 +71,7 @@ if not _keyfile.exists():
     except FileExistsError:
         pass  # another worker created it first — read the same one below
 app.config["SECRET_KEY"] = _keyfile.read_text()
-app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"
+app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL or f"sqlite:///{DB_PATH}"
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB upload cap
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"

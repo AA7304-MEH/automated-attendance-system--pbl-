@@ -75,7 +75,11 @@ def _table_columns(conn, table):
 
 
 def _migrate(app):
-    """Add columns introduced in later phases to pre-existing databases."""
+    """Add columns introduced in later phases to pre-existing databases.
+    PRAGMA migrations are SQLite-only; other dialects rely on create_all()."""
+    if db.engine.dialect.name != "sqlite":
+        _promote_and_backfill(app)
+        return
     with db.engine.connect() as conn:
         cols = _table_columns(conn, "teachers")
         if "role" not in cols:
@@ -90,13 +94,17 @@ def _migrate(app):
             conn.commit()
             app.logger.info("migrated students table: added portal_pin column")
 
+    _promote_and_backfill(app)
+
+
+def _promote_and_backfill(app):
+    """Portable (any dialect): ensure an admin exists and students have PINs."""
     if not Teacher.query.filter_by(role="admin").first():
         first = Teacher.query.order_by(Teacher.id).first()
         if first:
             first.role = "admin"
             db.session.commit()
 
-    # backfill portal PINs so every student can use the portal
     stale = Student.query.filter(
         (Student.portal_pin.is_(None)) | (Student.portal_pin == "")
     ).all()
