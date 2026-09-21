@@ -2,8 +2,9 @@
 {% block title %}Login · Attendance System{% endblock %}
 {% block content %}
 <div class="login-card">
-  <h1>🎓 AutoAttendance</h1>
-  <p class="muted">AI suggests · teacher decides. Sign in to take attendance.</p>
+  <div class="login-logo">🎓</div>
+  <h1>Welcome back</h1>
+  <p class="muted">AI suggests · teacher decides.<br>Sign in to take attendance.</p>
   <form method="post" class="stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Email
@@ -13,10 +14,11 @@
     <label>Password
       <input type="password" name="password" required value="teacher123">
     </label>
-    <button class="btn btn-primary" type="submit">Sign in</button>
+    <button class="btn btn-primary btn-lg" type="submit">Sign in →</button>
   </form>
-  <p class="hint">Demo accounts (pre-filled):<br>
+  <p class="hint"><strong>Demo accounts</strong> (pre-filled)<br>
      <code>teacher@college.edu</code> — admin<br>
-     <code>arjun@college.edu</code> — teacher (ML only) / <code>teacher123</code></p>
+     <code>arjun@college.edu</code> — teacher (ML only)<br>
+     password for both: <code>teacher123</code></p>
 </div>
 {% endblock %}

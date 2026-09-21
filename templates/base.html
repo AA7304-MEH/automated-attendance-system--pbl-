@@ -13,6 +13,8 @@
     <span class="brand-badge">🎓</span> AutoAttendance
     <span class="tag">HITL demo</span>
   </a>
+  <button class="navtoggle" aria-label="Menu"
+          onclick="document.querySelector('.topbar nav').classList.toggle('open')">☰</button>
   {% if current_user.is_authenticated %}
   <nav>
     <a href="{{ url_for('dashboard') }}">Dashboard</a>
@@ -25,7 +27,7 @@
     {% endif %}
   </nav>
   <div class="userchip">
-    <span>{{ current_user.name }}{% if current_user.role == 'admin' %} · admin{% endif %}</span>
+    <span>{{ current_user.name }}{% if current_user.role == 'admin' %} <span class="tag">admin</span>{% endif %}</span>
     <a class="btn btn-ghost btn-sm" href="{{ url_for('logout') }}">Logout</a>
   </div>
   {% endif %}
