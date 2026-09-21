@@ -17,10 +17,12 @@ COPY requirements.txt ./
 
 RUN pip install --no-cache-dir --upgrade pip \
  && pip install --no-cache-dir \
-      numpy opencv-python-headless pandas \
+      numpy opencv-python-headless pandas pillow \
       flask flask-sqlalchemy flask-login gunicorn \
       "setuptools<81" dlib-bin \
  && pip install --no-cache-dir --no-deps face-recognition face_recognition_models click
+# note: face-recognition is installed --no-deps (dlib comes prebuilt), so its
+# other deps (Pillow, Click, models pkg) are listed explicitly above.
 
 COPY . .
 
