@@ -30,4 +30,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 EXPOSE 8000
 # data/ is a volume: the SQLite DB, enrollment portraits and encodings persist
 # across rebuilds. First boot auto-seeds the demo data and builds the pkl.
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "180", "app:app"]
+# Worker count via WEB_CONCURRENCY env var (default 1 — safe for 512MB free tier;
+# set 2+ on paid plans). gunicorn has no native env support, hence sh -c.
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:8000 --workers \"${WEB_CONCURRENCY:-1}\" --timeout 180 app:app"]
