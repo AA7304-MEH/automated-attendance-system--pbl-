@@ -30,6 +30,7 @@ from pathlib import Path
 
 import cv2
 import pandas as pd
+from PIL import Image, ImageOps
 from flask import (
     Flask, Response, abort, flash, redirect, render_template, request,
     send_from_directory, session, url_for,
@@ -166,7 +167,28 @@ def _save_upload(fileobj) -> Path:
         raise ValueError("Only .jpg / .jpeg / .png photos are allowed.")
     path = RUNTIME_UPLOADS_DIR / f"{uuid.uuid4().hex}{ext}"
     fileobj.save(path)
+    _normalize_photo(path, max_side=2000)
     return path
+
+
+def _normalize_photo(path: Path, max_side: int) -> None:
+    """Real-world photo prep, in place:
+    1. EXIF orientation — phones store pixels sideways + a flag; OpenCV and
+       dlib IGNORE the flag, so without this, phone photos have sideways faces.
+    2. Downscale huge images (12MP+) — faster detection, less RAM (free tier
+       has 512MB), well above the resolution the engine needs."""
+    try:
+        with Image.open(path) as img:
+            img = ImageOps.exif_transpose(img)
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            w, h = img.size
+            if max(w, h) > max_side:
+                scale = max_side / max(w, h)
+                img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+            img.save(path, quality=92)
+    except Exception:
+        pass  # unreadable EXIF/mode: keep the raw bytes, engine will try anyway
 
 
 def _visible_subjects():
@@ -506,6 +528,7 @@ def students():
                 return redirect(url_for("students"))
             photo_name = f"{sid}{ext}"
             photo_file.save(STUDENT_FACES_DIR / photo_name)
+            _normalize_photo(STUDENT_FACES_DIR / photo_name, max_side=1600)
             try:
                 store = get_recognizer().store
                 store.add_student(STUDENT_FACES_DIR / photo_name, sid)
