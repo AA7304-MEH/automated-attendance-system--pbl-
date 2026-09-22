@@ -5,12 +5,13 @@ measured results and viva Q&A. Reproducible: python scripts/make_project_pdf.py
 """
 
 import math
+import sys
 from pathlib import Path
 
 from fpdf import FPDF
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "docs" / "AutoAttendance_Project_Guide.pdf"
+OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "docs" / "AutoAttendance_Project_Guide.pdf"
 FONT_DIR = Path("/usr/share/fonts/truetype/dejavu")
 
 NAVY = (20, 26, 46)
@@ -368,6 +369,23 @@ p("Phone cameras store pixels sideways and add an EXIF flag telling viewers to r
   "Every upload is therefore normalized with Pillow: EXIF-transpose to true upright, convert to RGB, and "
   "downscale to 2000px on the long side (1600 for enrollment portraits) using Lanczos resampling. This also "
   "keeps 12MP photos fast and memory-safe on the 512MB free tier.")
+
+# --- proof figures (same as the Word report) ---
+def figure(img_name, caption):
+    img_path = ROOT / "data" / "outputs" / img_name
+    if not img_path.exists():
+        return
+    if pdf.get_y() > 160:
+        pdf.add_page()
+    w = CW * 0.78
+    pdf.image(str(img_path), x=(PW - w) / 2, w=w)
+    pdf.set_font("DV", "", 8)
+    pdf.set_text_color(107, 116, 144)
+    pdf.cell(0, 5, caption, align="C")
+    pdf.ln(8)
+
+figure("annotated_full.jpg", "Figure 1 - Good capture: all six students detected, matched and auto-approved (green).")
+figure("annotated_hard.jpg", "Figure 2 - Degraded capture: only 2 faces detectable, both correctly routed to NEEDS REVIEW (amber).")
 
 # ═══ 6. FEATURES ═══
 pdf.add_page()
