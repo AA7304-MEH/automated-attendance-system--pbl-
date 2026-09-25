@@ -1,0 +1,25 @@
+{
+  "source": "classroom_demo.jpg (6 faces)",
+  "results": [
+    {
+      "variant": "tilted_5deg.jpg",
+      "old_single_pass": 6,
+      "new_robust": 6
+    },
+    {
+      "variant": "ultra_tiny_18pct.jpg",
+      "old_single_pass": 0,
+      "new_robust": 2
+    },
+    {
+      "variant": "small_tilted_dim.jpg",
+      "old_single_pass": 0,
+      "new_robust": 4
+    },
+    {
+      "variant": "small_blurred.jpg",
+      "old_single_pass": 0,
+      "new_robust": 1
+    }
+  ]
+}
