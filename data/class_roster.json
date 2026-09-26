@@ -1,0 +1,90 @@
+[
+  {
+    "roll": "US001",
+    "first": "Utkarsh",
+    "last": "Sharma",
+    "photo": "US001.jpg",
+    "department": "CSE",
+    "semester": "TE"
+  },
+  {
+    "roll": "US002",
+    "first": "Riya",
+    "last": "Negi",
+    "photo": "US002.jpg",
+    "department": "CSE",
+    "semester": "TE"
+  },
+  {
+    "roll": "US003",
+    "first": "Sujoy",
+    "last": "Maity",
+    "photo": "US003.jpg",
+    "department": "CSE",
+    "semester": "TE"
+  },
+  {
+    "roll": "US004",
+    "first": "Priyanka",
+    "last": "Chavan",
+    "photo": "US004.jpg",
+    "department": "CSE",
+    "semester": "TE"
+  },
+  {
+    "roll": "US005",
+    "first": "Suraj",
+    "last": "Singh",
+    "photo": "US005.jpg",
+    "department": "CSE",
+    "semester": "TE"
+  },
+  {
+    "roll": "US006",
+    "first": "Akshata",
+    "last": "Patenkar",
+    "photo": "US006.jpg",
+    "department": "CSE",
+    "semester": "TE"
+  },
+  {
+    "roll": "US007",
+    "first": "Prachi",
+    "last": "Gupta",
+    "photo": "US007.jpg",
+    "department": "CSE",
+    "semester": "TE"
+  },
+  {
+    "roll": "US008",
+    "first": "Riya",
+    "last": "Sawant",
+    "photo": "US008.jpg",
+    "department": "CSE",
+    "semester": "TE"
+  },
+  {
+    "roll": "US009",
+    "first": "Pratiksha",
+    "last": "Wakshe",
+    "photo": "US009.jpg",
+    "department": "CSE",
+    "semester": "TE"
+  },
+  {
+    "roll": "US010",
+    "first": "Aditya",
+    "last": "Mehra",
+    "photo": "US010.jpg",
+    "department": "CSE",
+    "semester": "TE"
+  },
+  {
+    "roll": "US011",
+    "first": "Darshana",
+    "last": "Gupta",
+    "photo": "US011.jpg",
+    "department": "CSE",
+    "semester": "TE"
+  }
+]

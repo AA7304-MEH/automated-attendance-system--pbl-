@@ -13,6 +13,7 @@ Migrations for databases created in earlier phases:
     - students.portal_pin (Phase 6) — backfilled with hash of "1234"
 """
 
+import json
 import random
 from datetime import date, time, timedelta
 
@@ -62,6 +63,12 @@ def ensure_encodings():
     changed = False
     for sid, *_ in DEMO_STUDENTS:
         photo = STUDENT_FACES_DIR / f"{sid}.jpg"
+        if photo.exists() and sid not in store.known_ids:
+            store.add_student(photo, sid)
+            changed = True
+    for entry in _class_roster():
+        sid = entry["roll"]
+        photo = STUDENT_FACES_DIR / entry.get("photo", f"{sid}.jpg")
         if photo.exists() and sid not in store.known_ids:
             store.add_student(photo, sid)
             changed = True
@@ -148,6 +155,51 @@ def ensure_demo_staff(app):
     return changed
 
 
+def _class_roster():
+    """Real-class roster (rolls US*), shipped as data/class_roster.json so
+    every fresh boot re-creates the students AND re-encodes their portraits.
+    This keeps class enrollments alive across ephemeral-disk restarts on
+    free hosting (Render) — no manual re-enrollment needed after a restart."""
+    path = DATA_DIR / "class_roster.json"
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text())
+    except (ValueError, OSError):
+        return []
+
+
+def _ensure_class_students(app):
+    """Idempotently create Student rows for the shipped class roster.
+
+    MUST be called from inside _seed_locked's app context: it joins the
+    caller's session/transaction on purpose (a nested app_context would
+    check out a second SQLite connection and deadlock on the write lock).
+    """
+    roster = _class_roster()
+    if not roster:
+        return
+    pin_hash = generate_password_hash(DEFAULT_PORTAL_PIN)
+    created = 0
+    for entry in roster:
+        roll = entry["roll"]
+        if Student.query.filter_by(student_id=roll).first():
+            continue
+        photo = entry.get("photo") or f"{roll}.jpg"
+        if not (STUDENT_FACES_DIR / photo).exists():
+            photo = None
+        db.session.add(Student(
+            student_id=roll, first_name=entry["first"], last_name=entry["last"],
+            email=f"{roll.lower()}@college.edu",
+            department=entry.get("department"), semester=entry.get("semester"),
+            photo_path=photo, portal_pin=pin_hash,
+        ))
+        created += 1
+    if created:
+        db.session.commit()
+        app.logger.info("Seeded %d class-roster students", created)
+
+
 def _seed_locked(app):
     with app.app_context():
         db.create_all()
@@ -156,6 +208,7 @@ def _seed_locked(app):
         if Teacher.query.first():
             ensure_encodings()
             ensure_demo_staff(app)
+            _ensure_class_students(app)
             return False  # already seeded
 
         admin = Teacher(name=DEMO_ADMIN["name"], email=DEMO_ADMIN["email"],
@@ -193,6 +246,7 @@ def _seed_locked(app):
         db.session.flush()
 
         ensure_encodings()
+        _ensure_class_students(app)
 
         # ---- deterministic demo history: previous 14 weekdays x 3 subjects ----
         rng = random.Random(42)
