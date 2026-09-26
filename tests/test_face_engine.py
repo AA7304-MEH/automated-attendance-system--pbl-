@@ -45,15 +45,19 @@ def main():
             dim_ok = len(e) == 128
         check(f"portrait {p.name}", enrolled and dim_ok)
 
-    print("Test 2 — recognizer re-identifies every enrolled student in the original photo")
+    print("Test 2 — recognizer re-identifies every demo student in the original photo")
     rec = FaceRecognizer(ENCODINGS_PATH, FACE_MATCH_TOLERANCE, AUTO_APPROVE_DISTANCE)
+    # Demo students (ST*) are the people depicted in classroom_demo.jpg. The
+    # store may also contain real enrollees (e.g. US*) who are NOT in that
+    # photo, so the assertion covers the demo cast only.
+    demo_ids = {i for i in store.known_ids if i.startswith("ST")}
     group = UPLOADS_DIR / "classroom_demo.jpg"
     results = rec.recognize(group)
     found = {r.student_id for r in results if r.status != "unknown"}
     check(
-        "all enrolled students matched",
-        set(store.known_ids) <= found,
-        f"matched={sorted(found)}",
+        "all demo students matched",
+        demo_ids <= found,
+        f"demo={sorted(demo_ids)} matched={sorted(found)}",
     )
 
     print("Test 3 — augmented (flipped/dimmed/recompressed) photo still recognized")
@@ -62,9 +66,9 @@ def main():
         res2 = rec.recognize(aug)
         found2 = {r.student_id for r in res2 if r.status != "unknown"}
         check(
-            ">= 80% matched on augmented photo",
-            len(found2) >= 0.8 * len(store.known_ids),
-            f"matched={len(found2)}/{len(store.known_ids)}",
+            ">= 80% of demo students matched on augmented photo",
+            len(found2 & demo_ids) >= 0.8 * len(demo_ids),
+            f"matched={sorted(found2 & demo_ids)}/{len(demo_ids)}",
         )
 
     print("Test 4 — a stranger is never auto-approved")

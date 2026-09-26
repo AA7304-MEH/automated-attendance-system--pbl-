@@ -148,7 +148,11 @@ def main():
     r = c.post(f"/session/{sid_b}/confirm", data=data, follow_redirects=True)
     m = marks_for(2)
     present = [k for k, v in m.items() if v[0] == "Present"]
-    check("2 present, 4 absent by default", len(present) == 2 and len(m) == 6, str(m))
+    with app.app_context():
+        roster_n = Student.query.filter_by(active=True).count()
+    check("2 present, whole roster absent by default",
+          len(present) == 2 and len(m) == roster_n,
+          f"marks={len(m)} roster={roster_n}")
     check("one review-confirmed row", sum(1 for v in m.values() if v[1] == "review") == 1)
     check("corrected row marked manual", sum(1 for v in m.values() if v[1] == "manual") == 1)
 
@@ -170,7 +174,11 @@ def main():
     m = marks_for(3)
     check("ST001 present via manual override",
           m.get("ST001", ("?",))[0:2] == ("Present", "manual"), str(m.get("ST001")))
-    check("everyone else absent", sum(1 for v in m.values() if v[0] == "Absent") == 5)
+    with app.app_context():
+        roster_n = Student.query.filter_by(active=True).count()
+    n_absent = sum(1 for v in m.values() if v[0] == "Absent")
+    check("everyone else absent", n_absent == roster_n - 1,
+          f"absent={n_absent} expected={roster_n - 1}")
 
     print("Enrollment")
     token = csrf_of(c, "/students")
